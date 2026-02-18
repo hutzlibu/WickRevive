@@ -30,6 +30,7 @@ import 'react-reflex/styles.css'
 import { ReflexContainer, ReflexSplitter, ReflexElement } from 'react-reflex'
 import { throttle } from 'underscore';
 import localForage from 'localforage';
+window.localforage = localForage; // Expose globally for Wick engine (FileCache, AutoSave, ToolSettings)
 import 'react-toastify/dist/ReactToastify.css';
 import { toast } from 'react-toastify';
 import { SizeMe } from 'react-sizeme';
@@ -56,9 +57,9 @@ import WickCodeEditor from './PopOuts/WickCodeEditor/WickCodeEditor';
 
 import EditorWrapper from './EditorWrapper';
 
-const { version } = require('../../package.json');
+import { version } from '../../package.json';
 
-var classNames = require('classnames');
+import classNames from 'classnames';
 
 class Editor extends EditorCore {
   constructor () {

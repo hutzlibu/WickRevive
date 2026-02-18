@@ -23,7 +23,7 @@ import WickModal from 'Editor/Modals/WickModal/WickModal';
 
 import './_opensourcenotices.scss';
 
-var classNames = require("classnames");
+import classNames from 'classnames';
 
 class OpenSourceNotices extends Component {
     render () {
@@ -120,14 +120,6 @@ class OpenSourceNotices extends Component {
                     </p>
 
 
-                    <h3>Library: <a href="https://github.com/react-component/slider">rc-slider</a>, License: MIT</h3>
-                    <h4>Used in: Wick Editor Interface</h4>
-                    <p>The rc-slider library is governed by the following license:</p>
-                    <p>
-                        The MIT License (MIT)<br />Copyright (c) 2015-present Alipay.com, https://www.alipay.com/<br /><br />Permission is hereby granted, free of charge, to any person obtaining a copy<br />of this software and associated documentation files (the "Software"), to deal<br />in the Software without restriction, including without limitation the rights<br />to use, copy, modify, merge, publish, distribute, sublicense, and/or sell<br />copies of the Software, and to permit persons to whom the Software is<br />furnished to do so, subject to the following conditions:<br /><br />The above copyright notice and this permission notice shall be included in<br />all copies or substantial portions of the Software.<br /><br />THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS <br />OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF <br />MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. <br />IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY <br />CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, <br />TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE <br />SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.<br />
-                    </p>
-
-
                     <h3>Library: <a href="https://github.com/securingsincity/react-ace">react-ace</a>, License: MIT</h3>
                     <h4>Used in: Wick Editor Interface</h4>
                     <p>The react-ace library is governed by the following license:</p>
@@ -213,14 +205,6 @@ class OpenSourceNotices extends Component {
                     <p>The react-modal library is governed by the following license:</p>
                     <p>
                         Copyright (c) 2017 Ryan Florence<br /><br />Permission is hereby granted, free of charge, to any person obtaining a copy of<br />this software and associated documentation files (the "Software"), to deal in<br />the Software without restriction, including without limitation the rights to<br />use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies<br />of the Software, and to permit persons to whom the Software is furnished to do<br />so, subject to the following conditions:<br /><br />The above copyright notice and this permission notice shall be included in all<br />copies or substantial portions of the Software.<br /><br />THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR<br />IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,<br />FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE<br />AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER<br />LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,<br />OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE<br />SOFTWARE.<br />
-                    </p>
-
-
-                    <h3>Library: <a href="https://github.com/vlad-ignatov/react-numeric-input">react-numeric-input</a>, License: MIT</h3>
-                    <h4>Used in: Wick Editor Interface</h4>
-                    <p>The react-numeric-input library is governed by the following license:</p>
-                    <p>
-                        The MIT License (MIT)<br /><br />Copyright (c) 2015 vlad-ignatov<br /><br />Permission is hereby granted, free of charge, to any person obtaining a copy<br />of this software and associated documentation files (the "Software"), to deal<br />in the Software without restriction, including without limitation the rights<br />to use, copy, modify, merge, publish, distribute, sublicense, and/or sell<br />copies of the Software, and to permit persons to whom the Software is<br />furnished to do so, subject to the following conditions:<br /><br />The above copyright notice and this permission notice shall be included in all<br />copies or substantial portions of the Software.<br /><br />THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR<br />IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,<br />FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE<br />AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER<br />LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,<br />OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE<br />SOFTWARE.<br /><br />
                     </p>
 
 

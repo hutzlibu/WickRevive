@@ -60,7 +60,7 @@ export default function ColorPicker (props) {
             isOpen={open}
             toggle={toggle}
             target={itemID}
-            boundariesElement={'viewport'}>
+            fade={false}>
             <WickColorPicker
               toggle={toggle}
               colorPickerType={props.colorPickerType}

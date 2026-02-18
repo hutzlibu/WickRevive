@@ -22,7 +22,9 @@ import { DropTarget } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
 import './_canvas.scss';
-import styles from './_canvas.scss';
+
+// Value from Editor/_wickbrand.scss $editor-canvas-border
+const EDITOR_CANVAS_BORDER = '#6A6A6A';
 
 class Canvas extends Component {
   constructor (props) {
@@ -47,7 +49,7 @@ class Canvas extends Component {
     if(this.currentAttachedProject === project) return;
     this.currentAttachedProject = project;
 
-    project.view.canvasBGColor = styles.editorCanvasBorder;
+    project.view.canvasBGColor = EDITOR_CANVAS_BORDER;
     project.view.canvasContainer = this.canvasContainer.current;
     project.view.resize();
 

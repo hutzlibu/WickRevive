@@ -21,7 +21,7 @@ import React, { Component } from 'react';
 import { Popover } from 'reactstrap';
 import './_popupmenu.scss'
 
-var classNames = require("classnames");
+import classNames from 'classnames';
 
 class PopupMenu extends Component {
   render() {
@@ -31,7 +31,7 @@ class PopupMenu extends Component {
         isOpen={this.props.isOpen}
         toggle={this.props.toggle}
         target={this.props.target}
-        boundariesElement={'viewport'}
+        fade={false}
         className={classNames("popup-menu-popover", this.props.mobile && "mobile")}
       >
         {this.props.children}

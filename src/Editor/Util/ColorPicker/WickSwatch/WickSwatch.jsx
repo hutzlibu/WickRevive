@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
-var tinycolor = require("tinycolor2");
-var { Swatch } = require('react-color/lib/components/common');
+import tinycolor from 'tinycolor2';
+import { Swatch } from 'react-color/lib/components/common';
 
 class WickSwatch extends Component {
     constructor (props) {

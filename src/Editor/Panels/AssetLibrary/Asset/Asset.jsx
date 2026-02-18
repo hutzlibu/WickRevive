@@ -24,7 +24,7 @@ import DragDropTypes from 'Editor/DragDropTypes.js';
 import ToolIcon from 'Editor/Util/ToolIcon/ToolIcon';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
 
-var classNames = require('classnames');
+import classNames from 'classnames';
 
 const assetSource = {
   beginDrag(props, monitor, component) {

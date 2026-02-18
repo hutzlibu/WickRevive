@@ -33,6 +33,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
     if(this.props.processError) {
       this.props.processError(error, errorInfo)
     }
