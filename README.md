@@ -22,6 +22,8 @@
 
 The Wick Editor is a free and open-source tool for creating games, animations, and everything in-between. It's designed to be the most accessible tool for creating multimedia projects on the web.
 
+The original wick editor is abandoned - and this is a fork mostly done by claude so far.
+
 <p align="center"><img width="100%" src=".github/images/editor.svg"></p>
 
 ## Getting started
