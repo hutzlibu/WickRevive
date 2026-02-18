@@ -28,7 +28,7 @@ import ToolSettings from './ToolSettings/ToolSettings';
 import CanvasActions from './CanvasActions/CanvasActions';
 import PopupMenu from 'Editor/Util/PopupMenu/PopupMenu';
 
-var classNames = require('classnames');
+import classNames from 'classnames';
 
 class Toolbox extends Component {
   constructor(props) {
@@ -51,7 +51,7 @@ class Toolbox extends Component {
 
     this.toolDropdowns = {
       cursors: {active: 'cursor', options: ['cursor', 'pathcursor']},
-      brushes: {active: 'brush', options: ['brush', 'pencil']},
+      brushes: {active: 'brush', options: ['brush', 'pencil', 'pen']},
       eraser: 'eraser',
       shapes: {active: 'rectangle', options: ['rectangle', 'ellipse', 'line', 'text']},
       tools: {active: 'fillbucket', options: ['fillbucket', 'eyedropper']}
@@ -93,6 +93,7 @@ class Toolbox extends Component {
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='cursor' tooltip="Cursor" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='brush' tooltip="Brush" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='pencil' tooltip="Pencil" />
+        <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='pen' tooltip="Pen" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='eraser' tooltip="Eraser" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='rectangle' tooltip="Rectangle" />
         <ToolButton {...this.toolButtonProps} keyMap={this.props.keyMap} name='ellipse' tooltip="Ellipse" />

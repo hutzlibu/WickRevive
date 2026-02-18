@@ -32,6 +32,7 @@ class ToolSettings extends Component {
       "cursor": this.renderCursorSettings,
       "brush": this.renderBrushSettings,
       "pencil": this.renderPencilSettings,
+      "pen": this.renderPenSettings,
       "eraser": this.renderEraserSettings,
       "rectangle": this.renderRectangleSettings,
       "ellipse": this.renderEllipseSettings,
@@ -79,6 +80,14 @@ class ToolSettings extends Component {
   }
 
   renderPencilSettings = () => {
+    return (
+      <div className='settings-input-container'>
+        {this.renderStrokeWidth()}
+      </div>
+    );
+  }
+
+  renderPenSettings = () => {
     return (
       <div className='settings-input-container'>
         {this.renderStrokeWidth()}

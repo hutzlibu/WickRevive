@@ -29,5 +29,8 @@
     "gulp-rename": "^1.4.0",
     "gulp-uglify": "^3.0.1",
     "jsdoc": "^3.6.4"
+  },
+  "dependencies": {
+    "merge-stream": "^2.0.0"
   }
 }

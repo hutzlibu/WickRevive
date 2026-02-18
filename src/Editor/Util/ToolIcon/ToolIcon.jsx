@@ -26,6 +26,7 @@ import iconCursor from 'resources/toolbar-icons/cursor.svg';
 import iconEllipse from 'resources/toolbar-icons/ellipse.svg';
 import iconRectangle from 'resources/toolbar-icons/rectangle.svg';
 import iconLine from 'resources/toolbar-icons/line.svg';
+import iconPen from 'resources/toolbar-icons/pen.svg';
 import iconPencil from 'resources/toolbar-icons/pencil.svg';
 import iconEyeDropper from 'resources/toolbar-icons/eyedropper.svg';
 import iconEraser from 'resources/toolbar-icons/eraser.svg';
@@ -190,6 +191,7 @@ const icons = {
   "ellipse":iconEllipse,
   "rectangle":iconRectangle,
   "line":iconLine,
+  "pen":iconPen,
   "pencil":iconPencil,
   "eyedropper":iconEyeDropper,
   "eraser":iconEraser,
@@ -327,7 +329,7 @@ const icons = {
   "upload-dark": iconUploadDark
 }
 
-var classNames = require('classnames');
+import classNames from 'classnames';
 
 class ToolIcon extends Component {
   getSource() {
