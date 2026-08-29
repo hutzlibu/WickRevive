@@ -120,7 +120,11 @@ class Inspector extends Component {
    * @return {string} fill color opacity from 0 to 1.
    */
   getSelectionFillColorOpacity = () => {
-    return this.getSelectionAttribute('fillColor').alpha;
+    let color = this.getSelectionAttribute('fillColor');
+    if (color instanceof window.paper.Color && color.gradient) {
+      return color.gradient.stops.reduce((total, stop) => stop.color.alpha > total ? stop.color.alpha : total, 0);
+    }
+    return color.alpha;
   }
 
   /**
@@ -129,7 +133,21 @@ class Inspector extends Component {
    */
   setSelectionFillColorOpacity = (value) => {
     var color = this.getSelectionAttribute('fillColor');
-    color.alpha = value;
+    if (color instanceof window.paper.Color && color.gradient) {
+      let maxOpacity = color.gradient.stops.reduce((total, stop) => stop.color.alpha > total ? stop.color.alpha : total, 0);
+      if (maxOpacity === 0) {
+        color.gradient.stops.forEach(stop => { stop.color.alpha = value; });
+      } else {
+        let changeFactor = value / maxOpacity;
+        color.gradient.stops.forEach(stop => { stop.color.alpha *= changeFactor; });
+      }
+    } else {
+      color.alpha = value;
+    }
+
+    // `color` is the live paper.Color of the *first* selected object, so mutating it
+    // above only touched that one object. Push it back through the selection so every
+    // selected path gets it, Path.updateJSON() runs, and projectDidChange fires.
     this.setSelectionAttribute('fillColor', color);
   }
 
@@ -143,6 +161,22 @@ class Inspector extends Component {
       return this.setSelectionFillColorOpacity(newValue);
     }
     this.props.setSelectionAttribute(attribute, newValue);
+  }
+
+  /**
+   * Updates a selection attribute for an in-progress drag: renders the change but
+   * does not push an undo state, so one gesture produces one history entry (the
+   * final onChange, which goes through setSelectionAttribute).
+   */
+  setSelectionAttributeIntermediate = (attribute, newValue) => {
+    if (attribute === 'fillColorOpacity') {
+      return this.setSelectionFillColorOpacity(newValue);
+    }
+    if (this.props.setSelectionAttributeIntermediate) {
+      this.props.setSelectionAttributeIntermediate(attribute, newValue);
+    } else {
+      this.props.setSelectionAttribute(attribute, newValue);
+    }
   }
 
   // Inspector Row Types
@@ -171,8 +205,29 @@ class Inspector extends Component {
         <InspectorColorNumericInput
           tooltip1="Fill"
           tooltip2="Opacity"
-          val1={this.getSelectionAttribute('fillColor').toCSS()}
+          val1={this.getSelectionAttribute('fillColor')}
           onChange1={(col) => this.setSelectionAttribute('fillColor', col)}
+          onChangeIntermediate1={(col) => this.setSelectionAttributeIntermediate('fillColor', col)}
+          enableGradient={true}
+          selectionProps={{
+            setGradientActive: () => {
+              this.props.project.selection.useGradientGUI = 'fill';
+              this.props.project.selection.selectedStopIndex = 0;
+              this.props.project.view.render();
+            },
+            setGradientInactive: () => {
+              this.props.project.selection.useGradientGUI = false;
+              this.props.project.selection.selectedStopIndex = 0;
+              this.props.project.view.render();
+            },
+            getSelectedStopIndex: () => this.props.project.selection.selectedStopIndex,
+            setSelectedStopIndex: (index) => {
+              this.props.project.selection.selectedStopIndex = index;
+            },
+            selectedObjects: [...this.props.project.selection._selectedObjectsUUIDs].sort(),
+            selectedObjectsBounds: this.props.project.selection.view._getSelectedObjectsBounds(),
+            targetCanvas: this.props.project.view._svgCanvas
+          }}
           id={"inspector-selection-fill-color"}
           val2={this.getSelectionAttribute('fillColorOpacity')}
           onChange2={(val) => this.setSelectionAttribute('fillColorOpacity', val)}
@@ -186,8 +241,29 @@ class Inspector extends Component {
           tooltip1="Stroke"
           tooltip2="Weight"
 
-          val1={this.getSelectionAttribute('strokeColor').toCSS()}
+          val1={this.getSelectionAttribute('strokeColor')}
           onChange1={(col) => this.setSelectionAttribute('strokeColor', col)}
+          onChangeIntermediate1={(col) => this.setSelectionAttributeIntermediate('strokeColor', col)}
+          enableGradient={true}
+          selectionProps={{
+            setGradientActive: () => {
+              this.props.project.selection.useGradientGUI = 'stroke';
+              this.props.project.selection.selectedStopIndex = 0;
+              this.props.project.view.render();
+            },
+            setGradientInactive: () => {
+              this.props.project.selection.useGradientGUI = false;
+              this.props.project.selection.selectedStopIndex = 0;
+              this.props.project.view.render();
+            },
+            getSelectedStopIndex: () => this.props.project.selection.selectedStopIndex,
+            setSelectedStopIndex: (index) => {
+              this.props.project.selection.selectedStopIndex = index;
+            },
+            selectedObjects: [...this.props.project.selection._selectedObjectsUUIDs].sort(),
+            selectedObjectsBounds: this.props.project.selection.view._getSelectedObjectsBounds(),
+            targetCanvas: this.props.project.view._svgCanvas
+          }}
           id={"inspector-selection-stroke-color"}
           stroke={true}
 

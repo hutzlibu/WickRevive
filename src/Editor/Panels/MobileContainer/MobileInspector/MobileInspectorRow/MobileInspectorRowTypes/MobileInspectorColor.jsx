@@ -49,6 +49,8 @@ class MobileInspectorColor extends Component {
               changeColorPickerType:this.props.changeColorPickerType,
               updateLastColors:this.props.updateLastColors,
               lastColorsUsed:this.props.lastColorsUsed,
+              enableGradient: this.props.enableGradient,
+              ...this.props.selectionProps,
             }
           }
         />

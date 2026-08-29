@@ -477,6 +477,22 @@ class EditorCore extends Component {
   }
 
   /**
+   * Updates the value of a selection attribute without pushing an undo state.
+   * Use for the intermediate frames of a drag (color sliders, gradient stops); the
+   * gesture's final value must still go through setSelectionAttribute so that one
+   * undo step covers the whole drag.
+   * @param {string} attribute Name of the attribute to update.
+   * @param {string|number} newValue  New value of the attribute to update.
+   */
+  setSelectionAttributeIntermediate = (attribute, newValue) => {
+    this.project.selection[attribute] = newValue;
+    this.projectDidChange({
+      actionName: "Set Selection Attribute: " + attribute + ":" + newValue,
+      skipHistory: true,
+    });
+  }
+
+  /**
    * Determines if a given object is selected.
    * @param {object} object - Selection object to check if it is selected
    * @returns {boolean} - True if the object is selected, false otherwise
@@ -548,6 +564,14 @@ class EditorCore extends Component {
    * @returns {object[]} The objects that were deleted.
    */
   deleteSelectedObjects = () => {
+    if(this.project.selection.useGradientGUI) {
+      // The gradient editor is open: Delete targets the selected color stop, not
+      // the paths it belongs to.
+      this.project.selection.deleteSelectedStop();
+      this.projectDidChange({actionName: "Delete Selected Gradient Stop"});
+      return;
+    }
+
     if(this.project.selection.location === 'AssetLibrary') {
       this.openWarningModal({
         description: "Any objects in the project using this asset will also be deleted.",

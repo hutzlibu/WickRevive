@@ -53,6 +53,8 @@ Wick.Selection = class extends Wick.Base {
         };
         data.originalWidth = this._originalWidth;
         data.originalHeight = this._originalHeight;
+        data.useGradientGUI = this._useGradientGUI;
+        data.selectedStopIndex = this._selectedStopIndex;
         return data;
     }
 
@@ -66,6 +68,11 @@ Wick.Selection = class extends Wick.Base {
         };
         this._originalWidth = data.originalWidth;
         this._originalHeight = data.originalHeight;
+        // These drive the on-canvas gradient GUI. They have to round-trip with the
+        // stops they index into, or undoing a stop creation leaves the index pointing
+        // past the end of the (restored) stop list.
+        this._useGradientGUI = data.useGradientGUI || false;
+        this._selectedStopIndex = data.selectedStopIndex || 0;
     }
 
     get classname() {
@@ -1007,6 +1014,51 @@ Wick.Selection = class extends Wick.Base {
         this.getSelectedObjects().forEach(selectedObject => {
             selectedObject[attributeName] = value;
         });
+    }
+
+    get useGradientGUI () {
+        return this._useGradientGUI || false;
+    }
+    set useGradientGUI (type) {
+        this._useGradientGUI = type;
+    }
+    get selectedStopIndex () {
+        return this._selectedStopIndex || 0;
+    }
+    set selectedStopIndex (index) {
+        this._selectedStopIndex = index;
+    }
+    /**
+     * Deletes the color stop currently selected in the gradient GUI. A gradient must
+     * keep at least two stops, so deleting one of the last two collapses the gradient
+     * to the surviving stop's color instead of removing it.
+     */
+    deleteSelectedStop() {
+        if (!this.useGradientGUI) return;
+
+        var isStroke = this.useGradientGUI === 'stroke';
+        var color = isStroke ? this.strokeColor : this.fillColor;
+        if (!color || !color.gradient) return;
+
+        var stops = color.gradient.stops;
+        var stopIndex = Math.max(0, Math.min(this.selectedStopIndex, stops.length - 1));
+        if (stops.length <= 2) {
+            stops[stopIndex].color = stops[1 - stopIndex].color;
+            stopIndex = 1 - stopIndex;
+        }
+        else {
+            stops.splice(stopIndex, 1);
+            if (stopIndex >= stops.length) {
+                stopIndex = stops.length - 1;
+            }
+        }
+        this.selectedStopIndex = stopIndex;
+
+        if (isStroke) {
+            this.strokeColor = color;
+        } else {
+            this.fillColor = color;
+        }
     }
 
     /*helper function for shift+selecting frames*/

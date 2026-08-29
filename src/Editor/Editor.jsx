@@ -420,19 +420,31 @@ class Editor extends EditorCore {
     );
   }
 
-  updateLastColors = (color) => {
+  updateLastColors = (color, edit) => {
+    // Skip gradient objects - they can't be stored as flat colors
+    if (color && typeof color === 'object' && color.stops) return;
+
     let newArray = this.state.lastColorsUsed.concat([]); // make a deep copy.
 
-    // Remove a color from the array. If the new color is in the array, remove it.
     let index = newArray.indexOf(color);
-    if (index > -1) {
-      newArray.splice(index, 1);
+    if (edit) {
+      // Replace the last color with the new color.
+      if (index > -1) {
+        newArray.splice(index, 1);
+        newArray.unshift(color);
+      }
+      else newArray[0] = color;
     } else {
-      newArray.pop();
-    }
+      // Remove a color from the array. If the new color is in the array, remove it.
+      if (index > -1) {
+        newArray.splice(index, 1);
+      } else {
+        newArray.pop();
+      }
 
-    // Add the new color to the front of the array.
-    newArray.unshift(color);
+      // Add the new color to the front of the array.
+      newArray.unshift(color);
+    }
 
     this.setState({
       lastColorsUsed: newArray,
@@ -1163,6 +1175,7 @@ class Editor extends EditorCore {
                         getAllSoundAssets={this.getAllSoundAssets}
                         getAllSelectionAttributes={this.getAllSelectionAttributes}
                         setSelectionAttribute={this.setSelectionAttribute}
+                        setSelectionAttributeIntermediate={this.setSelectionAttributeIntermediate}
                         editorActions={this.actionMapInterface.editorActions}
                         selectionIsScriptable={this.selectionIsScriptable}
                         script={this.getSelectedObjectScript()}
