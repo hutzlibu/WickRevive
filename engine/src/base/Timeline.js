@@ -439,6 +439,9 @@ Wick.Timeline = class extends Wick.Base {
                 this.forceFrame(namedFrame.start);
             }
         } else if (typeof frame === 'number') {
+            if (isNaN(frame)) {
+                throw new Error('gotoFrame: frame cannot be NaN');
+            }
             this.forceFrame(frame);
         } else {
             throw new Error('gotoFrame: Invalid argument: ' + frame);
