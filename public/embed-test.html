@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>wick embed export harness</title></head>
+<body>
+<pre id="out">starting</pre>
+<iframe id="ed" src="/index.html" style="width:900px;height:700px;border:1px solid #ccc"></iframe>
+<script>
+const out = document.getElementById('out');
+const log = m => {
+  out.textContent += '\n' + m;
+  fetch('http://localhost:8099/log', {method: 'POST', mode: 'no-cors', body: String(m)}).catch(() => {});
+};
+window.addEventListener('error', e => log('FAIL window.onerror: ' + e.message));
+
+async function run () {
+  const w = document.getElementById('ed').contentWindow;
+
+  // wait for the API to show up
+  for (let i = 0; i < 600 && !w.wickEditorReady; i++) await new Promise(r => setTimeout(r, 100));
+  if (!w.wickEditorReady) { log('FAIL: wickEditorReady never appeared'); return; }
+  await w.wickEditorReady;
+  log('READY globals=' + ['makeWickHtmlExport','makeWickSvgExport','makeWickGifExport','makeWickMp4Export','makeWickPngSequenceExport']
+        .map(k => k + ':' + (typeof w[k])).join(' '));
+
+  const only = new URLSearchParams(location.search).get('only');
+  const want = only ? only.split(',') : ['html', 'svg', 'png', 'gif'];
+
+  const cases = {
+    html: async () => {
+      const h = await w.makeWickHtmlExport();
+      return 'string len=' + h.length + ' doctype=' + h.startsWith('<!DOCTYPE html>') +
+             ' hasProjectData=' + /INJECTED_WICKPROJECT_DATA = '[A-Za-z0-9+/]/.test(h) +
+             ' placeholderGone=' + !h.includes('<!--INJECT_WICKPROJECTDATA_HERE-->');
+    },
+    svg: async () => {
+      const s = await w.makeWickSvgExport();
+      return 'string len=' + s.length + ' isSvg=' + s.trim().startsWith('<svg');
+    },
+    png: async () => {
+      let last = '';
+      const b = await w.makeWickPngSequenceExport({onProgress: (m, p) => { last = m + ' ' + p.toFixed(0) + '%'; }});
+      return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"';
+    },
+    gif: async () => {
+      let last = '';
+      const b = await w.makeWickGifExport({onProgress: (m, p) => { last = m + ' ' + Number(p).toFixed(0) + '%'; }});
+      return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"';
+    },
+    mp4: async () => {
+      let last = '';
+      const b = await w.makeWickMp4Export({onProgress: (m, p) => { last = m + ' ' + Number(p).toFixed(0) + '%'; }});
+      return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"';
+    },
+  };
+
+  for (const name of want) {
+    const t = Date.now();
+    try { log('OK ' + name + ': ' + await cases[name]() + ' (' + (Date.now() - t) + 'ms)'); }
+    catch (e) { log('FAIL ' + name + ': ' + (e && e.message)); }
+  }
+  log('DONE');
+}
+run().catch(e => log('FAIL harness: ' + (e && e.stack)));
+</script>
+</body>
+</html>

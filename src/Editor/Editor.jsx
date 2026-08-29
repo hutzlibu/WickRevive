@@ -57,6 +57,8 @@ import WickCodeEditor from './PopOuts/WickCodeEditor/WickCodeEditor';
 
 import EditorWrapper from './EditorWrapper';
 
+import { registerEmbedAPI } from './export/EmbedAPI';
+
 import { version } from '../../package.json';
 
 import classNames from 'classnames';
@@ -272,6 +274,10 @@ class Editor extends EditorCore {
     }
 
     this.watchForHover();
+
+    // Expose window.makeWickHtmlExport() and friends so a host page embedding
+    // this editor in a same-origin iframe can pull exports out of it.
+    registerEmbedAPI(this);
   }
 
   componentDidUpdate = (prevProps, prevState) => {

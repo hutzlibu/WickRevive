@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Wick embed host (dev harness)</title>
+    <style>
+        :root {
+            --bg: #16161a;
+            --panel: #1f1f25;
+            --line: #34343d;
+            --text: #e8e8ee;
+            --dim: #8a8a95;
+            --accent: #01c1d6;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .hint {
+            color: var(--dim);
+        }
+
+        kbd {
+            display: inline-block;
+            padding: 1px 6px;
+            border: 1px solid var(--line);
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            background: #2a2a32;
+            font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+            color: var(--text);
+        }
+
+        .spacer { flex: 1; }
+
+        button, label.file {
+            padding: 5px 12px;
+            border: 1px solid var(--line);
+            border-radius: 5px;
+            background: #2a2a32;
+            color: var(--text);
+            font: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        button:hover, label.file:hover { border-color: var(--accent); }
+        button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+        label.file input { display: none; }
+
+        main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            min-height: 0;
+        }
+
+        #stage {
+            width: 100%;
+            height: 100%;
+            max-width: 960px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #player {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        footer {
+            padding: 8px 20px;
+            border-top: 1px solid var(--line);
+            background: var(--panel);
+            color: var(--dim);
+            font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+            white-space: pre-wrap;
+            max-height: 25vh;
+            overflow-y: auto;
+        }
+
+        /* The editor, opened on demand. */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            background: rgba(0, 0, 0, .72);
+            padding: 2vh 2vw;
+        }
+
+        #overlay.open { display: flex; }
+
+        #overlay-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-bottom: 0;
+            border-radius: 8px 8px 0 0;
+            background: var(--panel);
+        }
+
+        #overlay-bar strong { font-size: 13px; }
+
+        #editor {
+            flex: 1;
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 0 0 8px 8px;
+            background: var(--bg);
+        }
+    </style>
+</head>
+
+<body>
+    <!--
+        Dev harness for the embedded-editor workflow.
+
+        The page plays a Wick project through player.html, and opens the editor
+        over it on demand. What travels between them is project data only (a
+        .wick file, kilobytes) — never the engine. Both frames load the engine
+        from the same URL, so the browser fetches those 2.2MB once.
+
+        Flow:
+            W                        open the editor over the player
+            "Send to player"         makeWickProjectData() out of the editor
+                                     frame, stash it, hand it to the player
+            "Load into editor"       the reverse, for round-tripping
+
+        The editor is same-origin here, so the host calls its exposed globals
+        (window.wickEditorReady, window.makeWickProjectData, ...) directly. The
+        player is driven over postMessage. Serve both from the dev server:
+        `npm start`, then http://localhost:5173/host-demo.html
+    -->
+    <header>
+        <h1>Wick embed host</h1>
+        <span class="hint">Press <kbd>W</kbd> to edit</span>
+        <span class="spacer"></span>
+        <button id="btn-play">Play</button>
+        <button id="btn-pause">Pause</button>
+        <button id="btn-stop">Rewind</button>
+        <button id="btn-mute">Mute</button>
+        <label class="file">Load .wick&hellip;<input type="file" id="file" accept=".wick"/></label>
+        <button id="btn-clear">Clear stored</button>
+    </header>
+
+    <main>
+        <div id="stage">
+            <iframe id="player" src="player.html" title="Wick player"></iframe>
+        </div>
+    </main>
+
+    <footer id="log"></footer>
+
+    <div id="overlay">
+        <div id="overlay-bar">
+            <strong>Wick Editor</strong>
+            <span class="hint" id="overlay-status">starting&hellip;</span>
+            <span class="spacer"></span>
+            <button id="btn-to-editor">&uarr; Load stored project into editor</button>
+            <button id="btn-to-player">&darr; Send to player &amp; close</button>
+            <button id="btn-cancel">Close without sending</button>
+        </div>
+        <iframe id="editor" title="Wick editor"></iframe>
+    </div>
+
+    <script>
+    (function () {
+        var STORAGE_KEY = 'wick-host-demo-project';
+
+        var playerFrame = document.getElementById('player');
+        var overlay = document.getElementById('overlay');
+        var overlayStatus = document.getElementById('overlay-status');
+        var editorFrame = document.getElementById('editor');
+        var logEl = document.getElementById('log');
+
+        var playerReady = false;
+        var muted = true;
+        var storedProject = null;
+
+        try {
+            storedProject = window.localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+            log('localStorage is unavailable, projects will not survive a reload.');
+        }
+
+        function log (message) {
+            var time = new Date().toTimeString().slice(0, 8);
+            logEl.textContent += (logEl.textContent ? '\n' : '') + time + '  ' + message;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        /* --- player -------------------------------------------------------- */
+
+        function sendToPlayer (command, extra) {
+            var message = {wickPlayer: 'command', command: command};
+            if (extra) Object.keys(extra).forEach(function (k) { message[k] = extra[k]; });
+            playerFrame.contentWindow.postMessage(message, window.location.origin);
+        }
+
+        function playInPlayer (base64) {
+            if (!playerReady) {
+                log('player is not ready yet.');
+                return;
+            }
+            sendToPlayer('load', {data: base64, format: 'base64'});
+        }
+
+        window.addEventListener('message', function (event) {
+            if (event.origin !== window.location.origin) return;
+            var message = event.data;
+            if (!message || !message.wickPlayer) return;
+
+            switch (message.wickPlayer) {
+                case 'ready':
+                    playerReady = true;
+                    log('player ready (engine ' + message.version + ')');
+                    if (storedProject) {
+                        log('sending the stored project (' + Math.round(storedProject.length / 1024) + ' KB of base64)');
+                        playInPlayer(storedProject);
+                    } else {
+                        log('nothing stored yet — press W, draw something, then "Send to player".');
+                    }
+                    break;
+                case 'loaded':
+                    log('playing "' + message.name + '" — ' + message.width + '×' + message.height +
+                        ', ' + message.frames + ' frames @ ' + message.framerate + 'fps');
+                    break;
+                case 'state':
+                    muted = message.muted;
+                    document.getElementById('btn-mute').textContent = muted ? 'Unmute' : 'Mute';
+                    break;
+                case 'error':
+                    log('player error: ' + message.message);
+                    break;
+            }
+        });
+
+        document.getElementById('btn-play').onclick = function () { sendToPlayer('play'); };
+        document.getElementById('btn-pause').onclick = function () { sendToPlayer('pause'); };
+        document.getElementById('btn-stop').onclick = function () { sendToPlayer('stop'); };
+        document.getElementById('btn-mute').onclick = function () { sendToPlayer(muted ? 'unmute' : 'mute'); };
+
+        document.getElementById('file').onchange = function (event) {
+            var file = event.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function () {
+                store(reader.result.split(',')[1]);
+                playInPlayer(storedProject);
+                log('loaded ' + file.name + ' from disk');
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        };
+
+        document.getElementById('btn-clear').onclick = function () {
+            storedProject = null;
+            try { window.localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            log('cleared the stored project');
+        };
+
+        function store (base64) {
+            storedProject = base64;
+            try {
+                window.localStorage.setItem(STORAGE_KEY, base64);
+            } catch (e) {
+                log('could not stash the project (' + e.name + ') — it is still in memory for this page.');
+            }
+        }
+
+        /* --- editor overlay ------------------------------------------------ */
+
+        function openEditor () {
+            if (overlay.classList.contains('open')) return;
+            overlay.classList.add('open');
+            overlayStatus.textContent = 'starting…';
+            // Mounted fresh each time: the editor keeps a live Wick.Project and
+            // a paper.js scope on its window, and tearing the frame down is the
+            // one reliable way to get rid of both.
+            editorFrame.src = 'index.html';
+
+            editorWindow().then(function () {
+                overlayStatus.textContent = 'ready';
+                log('editor ready');
+            }, function (e) {
+                overlayStatus.textContent = 'failed: ' + e.message;
+                log('editor failed to come up: ' + e.message);
+            });
+        }
+
+        function closeEditor () {
+            overlay.classList.remove('open');
+            editorFrame.src = 'about:blank';
+        }
+
+        // Resolves with the editor frame's window once its embed API is live.
+        function editorWindow () {
+            return new Promise(function (resolve, reject) {
+                var waited = 0;
+                (function poll () {
+                    var w = editorFrame.contentWindow;
+                    if (w && w.wickEditorReady) {
+                        w.wickEditorReady.then(function () { resolve(w); }, reject);
+                        return;
+                    }
+                    waited += 100;
+                    if (waited > 60000) {
+                        reject(new Error('window.wickEditorReady never appeared'));
+                        return;
+                    }
+                    setTimeout(poll, 100);
+                })();
+            });
+        }
+
+        document.getElementById('btn-to-player').onclick = function () {
+            overlayStatus.textContent = 'exporting…';
+            editorWindow()
+                .then(function (w) { return w.makeWickProjectData({format: 'base64'}); })
+                .then(function (base64) {
+                    store(base64);
+                    log('exported ' + Math.round(base64.length / 1024) + ' KB of project data');
+                    closeEditor();
+                    playInPlayer(base64);
+                })
+                .catch(function (e) {
+                    overlayStatus.textContent = 'export failed: ' + e.message;
+                    log('export failed: ' + e.message);
+                });
+        };
+
+        document.getElementById('btn-to-editor').onclick = function () {
+            if (!storedProject) {
+                overlayStatus.textContent = 'nothing stored to load';
+                return;
+            }
+            overlayStatus.textContent = 'loading…';
+            editorWindow()
+                .then(function (w) { return w.loadWickProjectData(storedProject, {format: 'base64'}); })
+                .then(function (project) {
+                    overlayStatus.textContent = 'loaded "' + project.name + '"';
+                    log('pushed the stored project into the editor');
+                })
+                .catch(function (e) {
+                    overlayStatus.textContent = 'load failed: ' + e.message;
+                    log('load into editor failed: ' + e.message);
+                });
+        };
+
+        document.getElementById('btn-cancel').onclick = closeEditor;
+
+        // Note this only fires while the host page has focus — key events
+        // inside either iframe belong to that document and never reach here,
+        // which is why the overlay carries its own close buttons.
+        window.addEventListener('keydown', function (event) {
+            if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+            var tag = event.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable) return;
+
+            if (event.key === 'w' || event.key === 'W') {
+                event.preventDefault();
+                openEditor();
+            } else if (event.key === 'Escape' && overlay.classList.contains('open')) {
+                closeEditor();
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

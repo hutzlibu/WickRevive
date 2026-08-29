@@ -80,17 +80,23 @@ class VideoExport {
     }
 
     static _generateVideo = async ({images, audio, args}) => {
-      let { project, onProgress, onFinish } = args;
+      let { project, onProgress, onFinish, skipDownload } = args;
 
       // Save on Done
       let onDone = (data) => {
         if(!(data instanceof Uint8Array)) {
           data = new Uint8Array(data);
         }
-        let blob = new Blob([data]);
-        window.saveFileFromWick(blob, project.name, '.mp4');
-        onProgress("Rendering Complete! Downloading...", 100);
-        onFinish();
+        let blob = new Blob([data], {type: 'video/mp4'});
+        // Embedded callers (see export/EmbedAPI.js) want the blob handed back
+        // instead of dropped into the user's downloads folder.
+        if(!skipDownload) {
+          window.saveFileFromWick(blob, project.name, '.mp4');
+          onProgress("Rendering Complete! Downloading...", 100);
+        } else {
+          onProgress("Rendering Complete!", 100);
+        }
+        onFinish(blob);
       }
 
       let workerReady = false;
@@ -120,6 +126,7 @@ class VideoExport {
           case "error":
             console.error("Video Renderer had an error. Please Try Again")
             console.error(msg)
+            args.onError && args.onError(msg.data || 'video worker error');
             break;
           default:
             break;

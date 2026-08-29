@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Wick Player</title>
+    <style>
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a1e;
+        }
+
+        #wick-canvas-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #status {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 24px;
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #8a8a95;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        #status.error {
+            color: #ff6b6b;
+        }
+
+        #status.hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!--
+        A minimal Wick player.
+
+        This is the counterpart to makeWickProjectData() in the editor: it loads
+        the engine once, from the same URL the editor iframe loads it from (so
+        it is an HTTP cache hit, not a second 2.2MB download), and then plays
+        whatever project data the host page sends it. No engine is bundled into
+        the payload — that is the entire point of this page, versus the ~2.2MB
+        single-file export from Wick.HTMLExport.
+
+        Why a separate document instead of playing inside the editor's frame, or
+        in the host page next to the editor: Wick.View.paperScope is a single
+        static paper.js scope per window, and View.Project calls paper.setup()
+        on it, which rebinds paper.project/paper.view globally. Wick.ObjectCache
+        is a per-window singleton too. So a window can only host one live Wick
+        project — a second one would hijack the first one's canvas. Own frame,
+        own scope.
+
+        Host protocol (postMessage, same origin):
+            host -> player  {wickPlayer: 'command', command: 'load',
+                             data: <base64 .wick>, format: 'base64'}
+                            {wickPlayer: 'command', command: 'play'|'pause'|'stop'}
+                            {wickPlayer: 'command', command: 'mute'|'unmute'}
+            player -> host  {wickPlayer: 'ready'}    engine up, send a project
+                            {wickPlayer: 'loaded', width, height, framerate, frames}
+                            {wickPlayer: 'state', playing, muted}
+                            {wickPlayer: 'error', message}
+
+        Or standalone: player.html?src=some/project.wick
+    -->
+    <div id="wick-canvas-container"></div>
+    <div id="status">Loading engine&hellip;</div>
+
+    <script src="corelibs/wick-engine/wickengine.js"></script>
+    <script>
+    (function () {
+        var container = document.getElementById('wick-canvas-container');
+        var statusEl = document.getElementById('status');
+
+        // The origin we answer to. Pinned to the first host that talks to us.
+        var hostOrigin = null;
+
+        // Autoplaying audio is blocked until the page has been interacted with,
+        // and howler will not always recover on its own, so start silent and
+        // open up on the first gesture (unless the host says otherwise).
+        var muted = true;
+        var mutedByHost = false;
+
+        Wick.resourcepath = 'corelibs/wick-engine/';
+
+        function status (message, isError) {
+            statusEl.textContent = message || '';
+            statusEl.className = message ? (isError ? 'error' : '') : 'hidden';
+        }
+
+        function post (message) {
+            if (window.parent === window) return;
+            window.parent.postMessage(message, hostOrigin || '*');
+        }
+
+        function fail (message) {
+            status(message, true);
+            post({wickPlayer: 'error', message: message});
+            console.error('Wick player: ' + message);
+        }
+
+        function postState () {
+            post({
+                wickPlayer: 'state',
+                playing: !!(window.project && window.project._playing),
+                muted: muted,
+            });
+        }
+
+        /* --- playback ------------------------------------------------------ */
+
+        function startPlayback () {
+            if (!window.project) return;
+            window.project.play({
+                onAfterTick: function () {
+                    window.project.view.render();
+                },
+                onError: function (error) {
+                    console.error('Wick player: the project threw an error.');
+                    console.error(error);
+                    post({
+                        wickPlayer: 'error',
+                        message: 'Project script error: ' + (error && error.message),
+                    });
+                },
+            });
+            postState();
+        }
+
+        function pause () {
+            // Project.stop() keeps the playhead where it is, so this reads as a
+            // pause; it does roll back state the scripts changed (it restores
+            // the pre-play history snapshot).
+            if (!window.project || !window.project._playing) return;
+            window.project.stop();
+            postState();
+        }
+
+        function rewind () {
+            if (!window.project) return;
+            if (window.project._playing) window.project.stop();
+            window.project.focus = window.project.root;
+            window.project.focus.timeline.playheadPosition = 1;
+            window.project.view.render();
+            postState();
+        }
+
+        function setMuted (value) {
+            muted = !!value;
+            if (window.project) {
+                muted ? window.project.mute() : window.project.unmute();
+            }
+            postState();
+        }
+
+        function unload () {
+            if (!window.project) return;
+            if (window.project._playing) window.project.stop();
+            window.project = null;
+            container.innerHTML = '';
+            // Objects are keyed by uuid in a window-global cache; drop the old
+            // project's before loading the next one.
+            Wick.ObjectCache.clear();
+        }
+
+        /* --- loading ------------------------------------------------------- */
+
+        function load (data, format) {
+            if (!data) {
+                fail('No project data was sent.');
+                return;
+            }
+
+            status('Loading project…');
+            unload();
+
+            // JSZip sniffs Blob/ArrayBuffer/Uint8Array itself; only base64 has
+            // to be declared.
+            Wick.WickFile.fromWickFile(data, function (project) {
+                if (!project) {
+                    fail('Could not read the project data.');
+                    return;
+                }
+
+                // Project.inject() installs a window.onresize handler that
+                // refers to a global named `project` (see Project.js, inject()),
+                // so it only works on a page that happens to have one. Give it
+                // one rather than letting every resize throw.
+                window.project = project;
+
+                if (muted) project.mute();
+                project.inject(container);
+
+                status('');
+                post({
+                    wickPlayer: 'loaded',
+                    width: project.width,
+                    height: project.height,
+                    framerate: project.framerate,
+                    frames: project.root.timeline.length,
+                    name: project.name,
+                });
+                postState();
+            }, format === 'base64' ? 'base64' : 'blob');
+        }
+
+        function loadFromURL (url) {
+            status('Fetching ' + url + '…');
+            fetch(url)
+                .then(function (response) {
+                    if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
+                    return response.blob();
+                })
+                .then(function (blob) { load(blob, 'blob'); })
+                .catch(function (e) { fail('Could not fetch ' + url + ': ' + e.message); });
+        }
+
+        /* --- host protocol ------------------------------------------------- */
+
+        window.addEventListener('message', function (event) {
+            var message = event.data;
+            if (!message || message.wickPlayer !== 'command') return;
+
+            // Same-origin only. Cross-origin embedding would mean allow-listing
+            // host origins here (and in the editor, which currently exposes its
+            // API as same-origin globals).
+            if (event.origin !== window.location.origin) {
+                console.warn('Wick player: ignoring a command from ' + event.origin);
+                return;
+            }
+            hostOrigin = event.origin;
+
+            switch (message.command) {
+                case 'load':
+                    load(message.data, message.format);
+                    break;
+                case 'play':
+                    startPlayback();
+                    break;
+                case 'pause':
+                    pause();
+                    break;
+                case 'stop':
+                    rewind();
+                    break;
+                case 'mute':
+                    mutedByHost = true;
+                    setMuted(true);
+                    break;
+                case 'unmute':
+                    mutedByHost = false;
+                    setMuted(false);
+                    break;
+                default:
+                    console.warn('Wick player: unknown command "' + message.command + '".');
+            }
+        });
+
+        ['pointerdown', 'keydown'].forEach(function (type) {
+            window.addEventListener(type, function () {
+                if (!mutedByHost && muted) setMuted(false);
+            });
+        });
+
+        var src = new URLSearchParams(window.location.search).get('src');
+        if (src) {
+            loadFromURL(src);
+        } else {
+            status('Waiting for a project…');
+        }
+
+        post({wickPlayer: 'ready', version: Wick.version});
+    })();
+    </script>
+</body>
+</html>
