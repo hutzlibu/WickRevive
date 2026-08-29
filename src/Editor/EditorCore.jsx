@@ -1333,7 +1333,7 @@ class EditorCore extends Component {
   /**
    * Export the current project as a bundled standalone HTML file.
    */
-  exportProjectAsStandaloneHTML = (args) => {
+  exportProjectAsStandaloneHTML = (args = {}) => {
     let toastID = this.toast('Exporting project as HTML...', 'info');
     let outputName = args.name || this.project.name;
     window.Wick.HTMLExport.bundleProject(this.project, html => {

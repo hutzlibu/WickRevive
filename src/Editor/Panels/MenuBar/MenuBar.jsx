@@ -66,11 +66,18 @@ class MenuBar extends Component {
           />
 
           <MenuBarButton
+            id="menu-bar-export-html-button"
+            text="html"
+            tooltip="Export as a standalone HTML file"
+            action={() => this.props.exportProjectAsStandaloneHTML({})}
+          />
+
+          <MenuBarButton
             text="save"
             action={this.props.exportProjectAsWickFile}
             color='save'
           />
-          
+
           <MenuBarIconButton
             icon="gear"
             action={() => this.props.openModal('SettingsModal')}
