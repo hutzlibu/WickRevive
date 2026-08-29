@@ -702,6 +702,7 @@ class EditorCore extends Component {
    * Horizontally flips the canvas selection.
    */
   flipSelectedHorizontal = () => {
+    if(this.project.selection.numObjects === 0) return; // Ignore if no objects are selected.
     this.project.selection.flipHorizontally();
     this.projectDidChange({ actionName: "Flip Selection Horizontal" });
   }
@@ -710,6 +711,7 @@ class EditorCore extends Component {
    * Vertically flips the canvas selection.
    */
   flipSelectedVertical = () => {
+    if(this.project.selection.numObjects === 0) return; // Ignore if no objects are selected.
     this.project.selection.flipVertically();
     this.projectDidChange({ actionName: "Flip Selection Vertical" });
   }

@@ -59,7 +59,8 @@ class HotKeyInterface extends Object {
       },
       'activate-cursor': {
         name: "Activate Cursor",
-        sequences: ['c', 'v'],
+        // Note: 'v' is not bound here, it flips the selection vertically (see 'flip-vertical').
+        sequences: ['c'],
       },
       'activate-path-cursor': {
         name: "Activate Path Cursor",
@@ -217,9 +218,22 @@ class HotKeyInterface extends Object {
         name: "Select All",
         sequences: ['meta+a'],
       },
+      'flip-horizontal': {
+        name: "Flip Horizontal",
+        sequences: ['h'],
+      },
+      'flip-vertical': {
+        name: "Flip Vertical",
+        sequences: ['v'],
+      },
       'bring-to-front': {
         name: "Bring to Front",
-        sequences: ['meta+shift+up'],
+        // '+' is an unshifted key on some layouts (and on the numpad), but on US keyboards it is
+        // shift+'=', which is a two key combination and doesn't match the '+' sequence. Both are
+        // bound so the same physical key works everywhere. Only one of them can ever match a
+        // single keypress, so this never fires twice.
+        // Note: the settings modal only shows the first two sequences of an action.
+        sequences: ['+', 'meta+shift+up', 'shift+='],
       },
       'move-forwards': {
         name: "Move Forwards",
@@ -227,7 +241,7 @@ class HotKeyInterface extends Object {
       },
       'send-to-back': {
         name: "Send to Back",
-        sequences: ['meta+shift+down'],
+        sequences: ['-', 'meta+shift+down'],
       },
       'move-backwards': {
         name: "Move Backwards",
@@ -384,7 +398,9 @@ class HotKeyInterface extends Object {
       ], 
       "Canvas Selection": [
         "create-clip-from-selection",
-        "bring-to-front", 
+        "flip-horizontal",
+        "flip-vertical",
+        "bring-to-front",
         "send-to-back", 
         "move-forwards",
         "move-backwards",
@@ -474,6 +490,8 @@ class HotKeyInterface extends Object {
       'cut-frame': this.editor.cutFrame,
       'insert-blank-frame': this.editor.insertBlankFrame,
       'select-all': this.editor.selectAll,
+      'flip-horizontal': this.editor.flipSelectedHorizontal,
+      'flip-vertical': this.editor.flipSelectedVertical,
       'bring-to-front': this.editor.sendSelectionToFront,
       'send-to-back': this.editor.sendSelectionToBack,
       'move-forwards': this.editor.moveSelectionForwards,
@@ -523,6 +541,8 @@ class HotKeyInterface extends Object {
       // Start the repeat timers if this hotkey is repeatable
       var options = this.keyMap[name];
       if(options.repeatable) {
+        clearInterval(this.repeatKeyInterval);
+        clearTimeout(this.repeatKeyTimeout);
         this.repeatKeyTimeout = setTimeout(() => {
           this.repeatKeyInterval = setInterval(() => {
             fn();
@@ -619,13 +639,15 @@ class HotKeyInterface extends Object {
       if (customKeys[actionName]) {
         let customSequences = customKeys[actionName];
 
-        if (customSequences[0] || customSequences[0] === "") {
-          newKeyMap[actionName].sequences[0] = customSequences[0];
-        }
+        // The settings modal only edits the first two sequences, but it clears sequences at any
+        // index when their key gets bound to another action, so every index is applied here.
+        Object.keys(customSequences).forEach((index) => {
+          let customSequence = customSequences[index];
 
-        if (customSequences[1] || customSequences[1] === "") {
-          newKeyMap[actionName].sequences[1] = customSequences[1];
-        }
+          if (customSequence || customSequence === "") {
+            newKeyMap[actionName].sequences[index] = customSequence;
+          }
+        });
       }
     });
 
