@@ -12,10 +12,15 @@ Ground rules for every phase:
 
 ---
 
-## Phase 0 — Land the working tree first
+## Phase 0 — Land the working tree first ✅ DONE
 
-**Why first:** there are currently **3,933 changed lines across 38 files** uncommitted, plus 12 untracked paths.
+**Why first:** there were **3,933 changed lines across 38 files** uncommitted, plus 12 untracked paths.
 Refactoring on top of that produces a diff nobody can review and conflicts nobody can bisect.
+
+**Landed as ten commits, `8b6a87b1..2e0dc4f4`.** The split ran to nine source commits rather than the six
+planned below, because three seams turned out to be independent of the features they sat next to (the hotkey
+work, the menu bar button, and three unrelated one-line bug fixes). `npm run build` passes at the tip; the
+tag `pre-refactor` points at it.
 
 ### 0a. Clear two blockers before staging anything
 
@@ -26,54 +31,66 @@ Refactoring on top of that produces a diff nobody can review and conflicts nobod
       **Don't use mtimes to check freshness** — gulp stamps `dist/wickengine.js` with the newest *source* file's
       mtime, so `find engine/src -newer engine/dist/wickengine.js` always reports a file and never means anything.
       Grep the bundle for a symbol instead.
-- [ ] **The index is already dirty.** Three deletions are staged: `public/electron.js`, `entitlements.mac.plist`,
-      `engine/src/export/zip/wickengine.js`. They belong in commit 1 below — just be aware that whatever you
-      commit *first* will sweep them in unless you unstage them.
+- [x] **The index was already dirty.** Three deletions were staged: `public/electron.js`,
+      `entitlements.mac.plist`, `engine/src/export/zip/wickengine.js`. They landed in commit 1.
 
-### 0b. Split the working tree into these seven commits
+### 0b. The split, as landed
 
-The tree contains **two features that each span `engine/` and `src/`** (gradient editing, timeline context menu).
-They cannot be split engine-from-UI without a broken intermediate state — the gradient GUI needs
-`Selection.useGradientGUI` to exist, the context menu needs `GUIElement.rightClickAtPosition`. Keep each feature
-as one commit crossing both trees.
+The tree held **two features that each span `engine/` and `src/`** (gradient editing, timeline context menu).
+They can't be split engine-from-UI without a broken intermediate state — the gradient GUI needs
+`Selection.useGradientGUI` to exist, the context menu needs `GUIElement.rightClickAtPosition` — so each is one
+commit crossing both trees.
 
-- [ ] **1 — Housekeeping / drop Electron:** `.gitignore`, `README.md`, `engine/README.md`, `CLAUDE.md`,
-      the three staged deletions, the electron-related parts of `package.json`.
-- [ ] **2 — Relative asset paths for subpath deploy:** `fontInfo.js`, `export/GIFExport.js`,
-      `Modals/BuiltinLibrary/BuiltinLibrary.jsx`, `index.html`, plus the path hunks of `EditorCore.jsx`.
-- [ ] **3 — Embed/player API:** `src/Editor/export/EmbedAPI.js`, `public/player.html`, `public/host-demo.html`,
-      `public/embed-test.html`, `export/VideoExport.js`, plus the EmbedAPI hunks of `Editor.jsx`.
-- [ ] **4 — Gradient editing (engine + UI):** engine `base/Selection.js`, `tools/Cursor.js`, `tools/PathCursor.js`,
-      `view/View.Selection.js`, `view/paper-ext/Paper.SelectionWidget.js` (+446 lines) — plus
-      `Util/ColorPicker/**` (incl. new `ColorPickerComponents/`), `InspectorColorNumericInput.jsx`,
-      `MobileInspectorColor.jsx`, `Util/ToolIcon/ToolIcon.jsx`, `_wickbrand.scss`,
-      `toolbar-icons/linear.svg`, `toolbar-icons/radial.svg`, `public/cursors/gradMove.png`.
-- [ ] **5 — Timeline context menu + add-frame (engine + UI):** engine `gui/Project.js`, `gui/FramesContainer.js`,
-      `base/Frame.js`, `base/Timeline.js` — plus `Util/ContextMenu/`, `Panels/Canvas/Canvas.jsx`,
-      `Panels/Timeline/Timeline.jsx`.
-- [ ] **6 — Hotkeys / menubar / input leftovers:** `hotKeyMap.js`, `MenuBar.jsx`, `MenuBarButton.jsx`,
-      `Util/WickInput/WickInput.jsx`, and the remaining `Inspector.jsx` / `MobileInspector.jsx` hunks.
-- [ ] **7 — Rebuild engine:** `engine/dist/**` + `public/corelibs/wick-engine/**`, committed **together** —
-      they must never diverge. One trailing commit, *not* per-feature: gulp-concat output can't be meaningfully
-      split by feature, and rebuilding at each step would only produce noise.
+- [x] **`8b6a87b1` Drop the Electron desktop build; document the web-only setup** — `.gitignore`, `README.md`,
+      `engine/README.md`, `CLAUDE.md`, the three staged deletions, `package.json`.
+- [x] **`854c47d8` Make every runtime asset path relative** — `index.html`, `fontInfo.js`, `GIFExport.js`,
+      `BuiltinLibrary.jsx`, one hunk of `EditorCore.jsx`.
+- [x] **`e6b7b7af` Add an embed API so a host page can drive the editor in an iframe** — `EmbedAPI.js`,
+      `player.html`, `host-demo.html`, `embed-test.html`, `VideoExport.js`, two hunks of `Editor.jsx`.
+- [x] **`0d72b30d` Add gradient fills and an on-canvas gradient editor** — 5 engine files, `ColorPicker/**`
+      (incl. new `ColorPickerComponents/`), `Inspector.jsx`, `MobileInspector.jsx`, both color rows,
+      `ToolIcon.jsx`, `_wickbrand.scss`, `linear.svg`, `radial.svg`, `gradMove.png`, plus hunks of
+      `Editor.jsx`, `EditorCore.jsx`, `WickInput.jsx`.
+- [x] **`9a95e0df` Add right click context menus to the canvas and the timeline** — engine `gui/Project.js`,
+      `gui/FramesContainer.js`, new `Util/ContextMenu/`, `Canvas.jsx`, `Timeline.jsx`, plus hunks of
+      `Editor.jsx` and `EditorCore.jsx`.
+- [x] **`fec144f9` Bind flip and z-ordering to single keys; fix two hotkey bugs** — `hotKeyMap.js` and the
+      two flip guards in `EditorCore.jsx`.
+- [x] **`d5b78cbe` Add a standalone-HTML export button to the menu bar** — `MenuBar.jsx`,
+      `MenuBarButton.jsx`, plus hunks of `Editor.jsx` and `EditorCore.jsx`.
+- [x] **`f61d97d1` Open the code editor over the canvas instead of centered** — one hunk of `Editor.jsx`.
+- [x] **`f3d9c63e` Fix three unrelated latent bugs** — engine `base/Frame.js`, `base/Timeline.js`,
+      and `WickInput.jsx`'s numeric clamp.
+- [x] **`2e0dc4f4` Rebuild the engine bundles** — `engine/dist/**` + `public/corelibs/wick-engine/**`,
+      committed **together**; they must never diverge. One trailing commit, *not* per-feature: gulp-concat
+      output can't be meaningfully split by feature, and rebuilding at each step would only produce noise.
 
-Commits 2, 3, 4 and 6 all need hunk-level staging (`git add -p`) of `Editor.jsx`, `EditorCore.jsx`,
-`Inspector.jsx` and `MobileInspector.jsx`, which each carry changes from several seams.
-**Accept that the intermediate commits are not guaranteed to build**; verify `npm run build` at the end of the
-sequence only. Phase 0 buys a reviewable history, not a bisectable one — the bisect guarantee starts at Phase 1.
+**Deviations from the plan.** Three seams that the plan bundled into a "leftovers" commit turned out to be
+independent of everything around them and got their own commits: the hotkey work (`fec144f9`), the menu bar
+button (`d5b78cbe`), and three one-line bug fixes in unrelated files (`f3d9c63e`). Also, `engine/base/Frame.js`
+and `base/Timeline.js` were listed under the context-menu commit but have nothing to do with it.
+
+**On hunk-level staging.** Six of these commits needed partial staging of `Editor.jsx`, `EditorCore.jsx`,
+`Inspector.jsx`, `WickInput.jsx` and `hotKeyMap.js`, which each carried changes from several seams. Hand-writing
+the patches is a trap — context lines with trailing whitespace make `git apply` reject them, and
+`--ignore-whitespace` doesn't rescue it. Select hunks out of real `git diff` output instead (`git add -p`, or a
+script that slices the diff by hunk index and pipes it to `git apply --cached --recount`).
+
+As predicted, the intermediate commits are not each guaranteed to build; `npm run build` was verified at the
+tip. Phase 0 buys a reviewable history, not a bisectable one — the bisect guarantee starts at Phase 1.
 
 ### 0c. Decide on `todo`
 
-- [ ] The `todo` file's first item (embed the editor, export a minimal payload the host plays) is **already
-      substantially built** — `EmbedAPI.js`, `player.html` and `host-demo.html` all exist and are documented in
-      `CLAUDE.md`. Its other two items (layer inspector, remove the welcome screen) are feature work, not refactor
-      work. Decide whether a scratch todo belongs in git at all before committing it.
+- [ ] **Still open.** The `todo` file's first item (embed the editor, export a minimal payload the host plays)
+      is **already substantially built** — `EmbedAPI.js`, `player.html` and `host-demo.html` all exist and are
+      documented in `CLAUDE.md`. Its other two items (layer inspector, remove the welcome screen) are feature
+      work, not refactor work. It is the one path left untracked; decide whether a scratch todo belongs in git.
 
 ### 0d. Tag
 
-- [ ] `git tag pre-refactor` so you can always diff against the starting state.
+- [x] `git tag pre-refactor` — points at `2e0dc4f4`.
 
-**Done when:** `git status` is clean and `npm run build` succeeds.
+**Done when:** `git status` is clean and `npm run build` succeeds. ✅ (`todo` aside, pending 0c.)
 
 ---
 
