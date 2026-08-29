@@ -4,7 +4,6 @@
   "author": "Wicklets LLC",
   "private": true,
   "homepage": "./",
-  "main": "./public/electron.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/Wicklets/wick-editor.git"
@@ -49,69 +48,18 @@
     "underscore": "^1.9.1",
     "url-parse": "^1.4.7"
   },
-  "build": {
-    "appId": "com.wicklets.wickEditor",
-    "productName": "Wick Editor",
-    "icon": "public/icon.icns",
-    "afterSign": "electron-builder-notarize",
-    "copyright": "© 2016-2020 Wicklets LLC",
-    "files": [
-      "./build/**/*",
-      "./public/electron.js"
-    ],
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "license": "build/license_en.txt"
-    },
-    "mac": {
-      "target": [
-        "pkg",
-        "dmg"
-      ],
-      "category": "public.app-category.entertainment",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "./entitlements.mac.plist",
-      "entitlementsInherit": "./entitlements.mac.plist"
-    },
-    "dmg": {
-      "icon": false
-    },
-    "pkg": {
-      "license": "./build/license_en.txt"
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Entertainment"
-    },
-    "win": {
-      "icon": "build/icon.png"
-    }
-  },
   "scripts": {
     "start": "vite",
     "build": "vite build && cp CNAME_editor ./build/CNAME",
     "preview": "vite preview",
-    "dist": "electron-builder",
     "build-engine": "cd engine; mkdir dist/; gulp; cp -a dist/. ../public/corelibs/wick-engine/",
     "build-engine-windows": "cd engine & mkdir dist  2>nul &    gulp & xcopy /EY dist\\. ..\\public\\corelibs\\wick-engine\\",
-    "test": "react-scripts test",
-    "engine-tests": "cd engine; python -m SimpleHTTPServer 9999",
+    "test": "npm run engine-tests",
+    "engine-tests": "cd engine && echo 'Engine tests (built engine — run `npm run build-engine` first): http://localhost:9999/tests/index.html' && python3 -m http.server 9999",
     "predeploy": "npm run build",
     "editor-deploy": "npm run build; rm -r ../wick-site/public/editor; mkdir ../wick-site/public/editor; cp -r build/* ../wick-site/public/editor; cd ../wick-site/public/editor; rm CNAME; echo 'wickeditor.com/editor/' > CNAME; git add .; git commit -m 'update release build'; git push --force;",
     "test-deploy": "npm run build; rm -r ../wick-site/public/test; mkdir ../wick-site/public/test; cp -r build/* ../wick-site/public/test; cd ../wick-site/public/test; rm CNAME; echo 'wickeditor.com/test/' > CNAME; git add .; git commit -m 'update prerelease build'; git push --force;",
     "prerelease-deploy": "npm run build; cp -r build/* ../wick-editor-prerelease/; cd ../wick-editor-prerelease; rm CNAME; echo 'test.wickeditor.com' > CNAME; git add .; git commit -m 'update prerelease build'; git push --force;",
-    "deploy": "gh-pages -d build",
-    "electron": "electron .",
-    "electron-dev-macos": "ELECTRON_START_URL=http://localhost:5173 electron .",
-    "electron-dev-windows": "set ELECTRON_START_URL=http://localhost:5173 && electron .",
-    "build-packages": "electron-builder --mac --windows --linux",
-    "package-mac": "npm run build; electron-builder --mac",
-    "package-windows": "npm run build; electron-builder --windows",
-    "package-linux": "npm run build; electron-builder --linux",
     "phonegap-deploy": "npm run build; cd ../wick-editor-phonegap; npm run prepare-dir; cd ../wick-editor; cp -r build/* ../wick-editor-phonegap/www; cd ../wick-editor-phonegap; npm run prepare-app; git add .; git commit -m 'update phonegap build'; git push --force;",
     "phonegap-predeploy": "npm run build; cd ../wick-editor-phonegap; npm run prepare-dir; cd ../wick-editor; cp -r build/* ../wick-editor-phonegap/www; cd ../wick-editor-phonegap; npm run prepare-app;"
   },

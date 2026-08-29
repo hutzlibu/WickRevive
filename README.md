@@ -65,7 +65,7 @@ You'll need to download the following:
 2) Open a web browser and go to this URL:
 
     ```bash
-    localhost:3000
+    localhost:5173
     ```
 
 Have fun hacking on Wick! 🎉
@@ -74,9 +74,9 @@ Have fun hacking on Wick! 🎉
 
 To deploy, you'll need to have push access to this repo.
 
-1) Test the production build by using `npm predeploy`
+1) Test the production build by using `npm run predeploy`
 
-2) Run `npm run deploy`
+2) Run `npm run editor-deploy` (this expects a sibling `../wick-site` checkout and force-pushes it)
 
 ### Deploying to Prerelease
 
@@ -100,12 +100,6 @@ Wick Editor is under the GNU v3 Public License. See the [LICENSE](LICENSE.md) fo
 * [Follow on Facebook](https://www.facebook.com/wickeditor/)
 
 
-
-## Building and Releasing the Desktop App 
-
-Please refer to this Wiki entry for information on our dektop build processes! [https://github.com/Wicklets/wick-editor/wiki/Building-Desktop-Editors-for-Release](https://github.com/Wicklets/wick-editor/wiki/Building-Desktop-Editors-for-Release).
-
-If you are familiar with electron-builder, electron-packager, or have experience building desktop electron apps for production, we could use your help! Please message us or open an issue.
 
 ## Support From
 

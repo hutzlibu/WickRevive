@@ -24,7 +24,13 @@ Generating the docs also requires [npm](https://www.npmjs.com/).
 
 # Running Tests
 
-The Wick Engine uses the in-browser version of Mocha and Chai for tests. To run the tests, just open `tests/index.html` in the browser you wish to test with.
+The Wick Engine uses the in-browser version of Mocha and Chai for tests. They must be served over HTTP — opening `tests/index.html` over `file://` fails.
+
+1. Rebuild the engine (`npm run build-engine` from the repo root). The tests load `dist/wickengine.js`, not `src/`, so a stale build means stale tests.
+2. Start the test server: `npm test` (from the repo root) or `npm run engine-tests`.
+3. Open `http://localhost:9999/tests/index.html` in the browser you wish to test with.
+
+A test file only runs if it is listed in the `<script>` block of `tests/index.html`. Filter with Mocha's `?grep=` query parameter.
 
 # License
 
