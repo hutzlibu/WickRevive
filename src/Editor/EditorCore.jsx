@@ -1396,7 +1396,7 @@ class EditorCore extends Component {
 
 
     if (urlParams.example) {
-      let url = window.location.origin + '/examples/' + urlParams.example;
+      let url = new URL('examples/' + urlParams.example, window.location.href).href;
       console.log('attempting to load project', url);
       loadProjectFromURL(url);
       return;

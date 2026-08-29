@@ -2,22 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="shortcut icon" href="favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="theme-color" content="#000000">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
 
     <!-- Wick Editor Dependencies: -->
+    <!-- NOTE: every URL on this page must stay RELATIVE (no leading slash).
+         vite.config.mjs sets `base: './'` so the build is relocatable: it is served
+         from a subpath (wickeditor.com/editor/) and opened over file:// as well.
+         An absolute path resolves against the server/filesystem root there and 404s,
+         which means the engine never loads and Editor.jsx dies on window.Wick. -->
     <!-- Wick Engine -->
-    <script src="/corelibs/wick-engine/wickengine.js"></script>
+    <script src="corelibs/wick-engine/wickengine.js"></script>
     <!-- GIF Import/Export -->
-    <script src="/corelibs/gif/gif.js"></script>
+    <script src="corelibs/gif/gif.js"></script>
     <!-- preload.js -->
-    <script src="/corelibs/preload/preloadjs.min.js"></script>
+    <script src="corelibs/preload/preloadjs.min.js"></script>
     <!-- Preloader animation CSS -->
-    <link href="/preloader-animation.css" rel="stylesheet" type="text/css">
+    <link href="preloader-animation.css" rel="stylesheet" type="text/css">
     <!-- Wait overlay CSS -->
-    <link href="/wait-overlay.css" rel="stylesheet" type="text/css">
+    <link href="wait-overlay.css" rel="stylesheet" type="text/css">
 
     <title>Wick Editor</title>
     <style>
@@ -30,13 +35,13 @@
         font-family: 'Nunito Sans';
         font-style: normal;
         font-weight: 400;
-        src: url('/fonts/Nunito Sans/Nunito Sans_regular.ttf') format('truetype');
+        src: url('fonts/Nunito Sans/Nunito Sans_regular.ttf') format('truetype');
       }
       @font-face {
         font-family: 'PT Mono';
         font-style: normal;
         font-weight: 400;
-        src: url('/fonts/PT Mono/PTM55FT.ttf') format('truetype');
+        src: url('fonts/PT Mono/PTM55FT.ttf') format('truetype');
       }
     </style>
   </head>
