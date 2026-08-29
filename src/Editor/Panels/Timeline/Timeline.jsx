@@ -22,6 +22,9 @@ import React, { Component } from 'react';
 import { DropTarget } from 'react-dnd';
 import DragDropTypes from 'Editor/DragDropTypes.js';
 
+import ContextMenu from 'Editor/Util/ContextMenu/ContextMenu';
+import HotKeyInterface from 'Editor/hotKeyMap';
+
 import './_timeline.scss';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -47,6 +50,10 @@ class Timeline extends Component {
     super(props);
 
     this.canvasContainer = React.createRef();
+
+    this.state = {
+      contextMenu: null, // {x, y, target} of the open right click menu, null if closed.
+    };
   }
 
   componentDidMount () {
@@ -95,13 +102,74 @@ class Timeline extends Component {
     project.guiElement.canvasContainer = this.canvasContainer.current;
   }
 
+  onContextMenu = (e) => {
+    e.preventDefault();
+
+    if(this.props.previewPlaying) {
+      this.closeContextMenu();
+      return;
+    }
+
+    // Right clicking a frame or a tween acts on that object, not on whatever was
+    // selected before.
+    let target = this.props.project.guiElement.rightClickAtPosition(e.clientX, e.clientY);
+    if(!target) {
+      this.closeContextMenu();
+      return;
+    }
+
+    this.props.projectDidChange({ actionName: "Select Timeline Object" });
+
+    this.setState({contextMenu: {x: e.clientX, y: e.clientY, target: target}});
+  }
+
+  closeContextMenu = () => {
+    if(!this.state.contextMenu) return;
+    this.setState({contextMenu: null});
+  }
+
+  getContextMenuItems = (target) => {
+    let editor = this.props.editor;
+    let project = this.props.project;
+    // Use the full key map so the hotkeys are still shown while preview is playing.
+    let keyMap = editor.getKeyMap(true);
+    let hotkeyOf = (action) => HotKeyInterface.getHotKey(keyMap, action);
+
+    // Right clicking an empty cell adds a frame to that cell, right clicking an existing
+    // frame inserts a blank frame at the playhead.
+    let isEmptyCell = target.type === 'empty';
+    let addFrame = isEmptyCell
+      ? () => this.addFrame(target.playheadPosition, target.layerIndex)
+      : editor.insertBlankFrame;
+
+    return [
+      {label: 'Add Frame', icon: 'add', action: addFrame, hotkey: isEmptyCell ? null : hotkeyOf('insert-blank-frame')},
+      {label: 'Add Tween', icon: 'tween', action: editor.createTween, hotkey: hotkeyOf('create-tween'), disabled: !project.canCreateTween},
+      {divider: true},
+      {label: 'Delete', icon: 'delete', action: editor.deleteSelectedObjects, hotkey: hotkeyOf('delete'), danger: true, disabled: isEmptyCell},
+    ];
+  }
+
+  addFrame = (playheadPosition, layerIndex) => {
+    // The GUI element calls onProjectModified itself, so there's no projectDidChange here.
+    this.props.project.guiElement.addFrame(playheadPosition, layerIndex);
+  }
+
   render() {
     const { connectDropTarget, isOver } = this.props;
+    const { contextMenu } = this.state;
 
     return connectDropTarget (
-      <div id="animation-timeline-container" aria-label="Timeline">
+      <div id="animation-timeline-container" aria-label="Timeline" onContextMenu={this.onContextMenu}>
         { isOver && <div className="drag-drop-overlay" /> }
         <div id="animation-timeline" ref={this.canvasContainer} />
+        { contextMenu &&
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={this.getContextMenuItems(contextMenu.target)}
+            onClose={this.closeContextMenu}
+          /> }
       </div>
     )
   }

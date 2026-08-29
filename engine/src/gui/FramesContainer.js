@@ -106,7 +106,7 @@ Wick.GUIElement.FramesContainer = class extends Wick.GUIElement {
         });
 
         // Add frame overlay
-        if(this.mouseState === 'over' && !this._selectionBox && this._addFrameOverlayIsActive()) {
+        if(this.mouseState === 'over' && !this._selectionBox && this.addFrameOverlayIsActive()) {
             this.cursor = 'pointer';
 
             var x = this.addFrameCol * this.gridCellWidth;
@@ -197,23 +197,8 @@ Wick.GUIElement.FramesContainer = class extends Wick.GUIElement {
 
             // The selection box was just finished, select frames with the box bounds
             this._selectionBox.finish();
-        } else if (this._addFrameOverlayIsActive()) {
-            var playheadPosition = this.addFrameCol+1;
-            var layerIndex = this.addFrameRow;
-
-            // Create a new frame and add that frame to the project
-            var newFrame = new Wick.Frame({start: playheadPosition});
-            this.model.layers[layerIndex].addFrame(newFrame);
-
-            // Select that frame and activate the layer it belongs to
-            this.model.project.selection.clear();
-            this.model.project.selection.select(newFrame);
-            newFrame.parentLayer.activate();
-
-            // Move the playhead onto the new frame
-            this.model.project.activeTimeline.playheadPosition = playheadPosition;
-
-            this.projectWasModified();
+        } else if (this.addFrameOverlayIsActive()) {
+            this.project.addFrame(this.addFrameCol+1, this.addFrameRow);
         } else {
             // Nothing was clicked - clear the selection
             this.model.project.selection.clear();
@@ -232,7 +217,11 @@ Wick.GUIElement.FramesContainer = class extends Wick.GUIElement {
         };
     }
 
-    _addFrameOverlayIsActive () {
+    /**
+     * Checks if the cell the mouse is over is an empty cell that a frame can be added to.
+     * @returns {boolean}
+     */
+    addFrameOverlayIsActive () {
         return this.addFrameCol >= 0 &&
                this.addFrameRow >= 0 &&
                this.addFrameRow < this.model.layers.length &&

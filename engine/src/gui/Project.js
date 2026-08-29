@@ -121,6 +121,9 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
 
             this.createCanvasEvent('mousedown', e => {
                 if(e.touches) return;
+                // Right clicks open the timeline's right click menu, they should never
+                // move the playhead, change the selection, or create frames.
+                if(e.button === 2) return;
                 this._timeline_onMouseDown(e);
             }, false);
 
@@ -349,6 +352,73 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
     }
 
     /**
+     * Handles a right click on the timeline: selects whatever is underneath the given screen
+     * position so that the right click menu acts on what was clicked.
+     * @param {number} x - The x position on the screen.
+     * @param {number} y - The y position on the screen.
+     * @returns {object|null} A description of what was right clicked, of the shape {type},
+     * where type is 'frame', 'tween', or 'empty' (a cell with no frame in it). Empty targets
+     * also carry {playheadPosition, layerIndex}. Returns null if there's nothing right
+     * clickable at that position.
+     */
+    rightClickAtPosition (x, y) {
+        this.closePopupMenu();
+
+        // Update the hover targets so we know what's underneath the mouse.
+        this._onMouseMove({clientX: x, clientY: y, buttons: 0});
+
+        var target = this._getTopMouseTarget();
+        if(!target) return null;
+
+        var model = target.model;
+
+        if(model instanceof Wick.Tween) {
+            this.model.activeTimeline.playheadPosition = model.playheadPosition + model.parentFrame.start - 1;
+            this._selectRightClickedObject(model);
+            return {type: 'tween'};
+        } else if (model instanceof Wick.Frame) {
+            this.model.activeTimeline.playheadPosition = model.start + Math.floor(target.localMouse.x / this.gridCellWidth);
+            this._selectRightClickedObject(model);
+            return {type: 'frame'};
+        } else if (target instanceof Wick.GUIElement.FramesContainer && target.addFrameOverlayIsActive()) {
+            // An empty cell: there's nothing to select, but a frame can be added here.
+            this.model.selection.clear();
+            return {
+                type: 'empty',
+                playheadPosition: target.addFrameCol + 1,
+                layerIndex: target.addFrameRow,
+            };
+        }
+
+        return null;
+    }
+
+    /**
+     * Adds a blank frame to the timeline, selects it, and moves the playhead onto it.
+     * @param {number} playheadPosition - The position to create the frame at.
+     * @param {number} layerIndex - The index of the layer to add the frame to.
+     */
+    addFrame (playheadPosition, layerIndex) {
+        var timeline = this.model.activeTimeline;
+        var layer = timeline.layers[layerIndex];
+        if(!layer || layer.getFrameAtPlayheadPosition(playheadPosition)) return;
+
+        // Create a new frame and add that frame to the project
+        var newFrame = new Wick.Frame({start: playheadPosition});
+        layer.addFrame(newFrame);
+
+        // Select that frame and activate the layer it belongs to
+        this.model.selection.clear();
+        this.model.selection.select(newFrame);
+        newFrame.parentLayer.activate();
+
+        // Move the playhead onto the new frame
+        timeline.playheadPosition = playheadPosition;
+
+        this.projectWasModified();
+    }
+
+    /**
      * Auto scrolls the timeline if the playhead is considered off-screen.
      * This is built specifically for moving the playead with hotkeys.
      */
@@ -486,6 +556,16 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
             this.scrollY -= dy;
             this.draw();
         }
+    }
+
+    _selectRightClickedObject (object) {
+        // Right clicking something that's already selected keeps the rest of the selection,
+        // so that the menu can act on more than one frame at a time.
+        if(object.isSelected) return;
+
+        this.model.selection.clear();
+        this.model.selection.select(object);
+        object.parentLayer.activate();
     }
 
     _getTopMouseTarget () {

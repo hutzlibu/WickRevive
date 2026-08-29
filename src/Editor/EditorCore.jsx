@@ -24,6 +24,9 @@ import GIFExport from './export/GIFExport';
 import GIFImport from './import/GIFImport';
 import AudioExport from './export/AudioExport';
 
+// Same value as Wick.Tools.Cursor's SELECTION_TOLERANCE.
+const CANVAS_SELECTION_TOLERANCE = 3;
+
 class EditorCore extends Component {
 
   /**
@@ -622,6 +625,45 @@ class EditorCore extends Component {
       scriptToEdit: scriptName,
       codeEditorOpen: true,
     });
+  }
+
+  /**
+   * Selects the object underneath the given screen position, unless that object is already
+   * part of the selection. Used by the canvas right click menu so that right clicking an
+   * object acts on that object.
+   * @param {number} x - The x position on the screen.
+   * @param {number} y - The y position on the screen.
+   * @returns {boolean} True if there are objects on the canvas selected afterwards.
+   */
+  selectObjectAtPosition = (x, y) => {
+    let paper = this.project.view.paper;
+    let canvasPosition = paper.project.view.element.getBoundingClientRect();
+    let point = paper.view.viewToProject(new paper.Point(x - canvasPosition.x, y - canvasPosition.y));
+
+    let hitResult = paper.project.hitTest(point, {
+      fill: true,
+      stroke: true,
+      curves: true,
+      segments: true,
+      tolerance: CANVAS_SELECTION_TOLERANCE,
+      match: (result => !result.item.data.isBorder && !result.item.data.isSelectionBoxGUI),
+    });
+
+    let item = hitResult && hitResult.item;
+    if(item) {
+      // Children of compound paths and groups aren't selectable, only the whole thing is.
+      if(item.parent.className === 'CompoundPath') item = item.parent;
+      while(item.parent && item.parent.parent) item = item.parent;
+
+      let object = item.data.wickUUID && window.Wick.ObjectCache.getObjectByUUID(item.data.wickUUID);
+      if(object && !object.isSelected) {
+        this.project.selection.clear();
+        this.project.selection.select(object);
+        this.projectDidChange({ actionName: "Select Object" });
+      }
+    }
+
+    return this.project.selection.numObjects > 0 && this.project.selection.location === 'Canvas';
   }
 
   /**

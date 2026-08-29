@@ -1138,9 +1138,11 @@ class Editor extends EditorCore {
                           addSoundToActiveFrame={this.addSoundToActiveFrame}/>}
                         {renderSize !== "small" &&
                         <Timeline
+                          editor={this}
                           project={this.project}
                           projectDidChange={this.projectDidChange}
                           projectData={this.state.project}
+                          previewPlaying={this.state.previewPlaying}
                           getSelectedTimelineObjects={this.getSelectedTimelineObjects}
                           setOnionSkinOptions={this.setOnionSkinOptions}
                           getOnionSkinOptions={this.getOnionSkinOptions}
