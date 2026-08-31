@@ -28,6 +28,7 @@ Wick.Project = class extends Wick.Base {
      * @param {number} height - Project height in pixels. Default 480.
      * @param {number} framerate - Project framerate in frames-per-second. Default 12.
      * @param {Color} backgroundColor - Project background color in hex. Default #ffffff.
+     * @param {boolean} transparentBackground - If true, the stage renders with alpha instead of backgroundColor. Default false.
      */
     constructor(args) {
         if (!args) args = {};
@@ -38,6 +39,7 @@ Wick.Project = class extends Wick.Base {
         this._height = args.height || 480;
         this._framerate = args.framerate || 12;
         this._backgroundColor = args.backgroundColor || new Wick.Color('#ffffff');
+        this._transparentBackground = args.transparentBackground || false;
         this._hitTestOptions = this.getDefaultHitTestOptions();
 
         this.pan = { x: 0, y: 0 };
@@ -165,6 +167,8 @@ Wick.Project = class extends Wick.Base {
         this.height = data.height;
         this.framerate = data.framerate;
         this.backgroundColor = new Wick.Color(data.backgroundColor);
+        // Projects saved before transparent backgrounds existed have no key here, and are opaque.
+        this._transparentBackground = data.transparentBackground || false;
 
         this._focus = data.focus;
 
@@ -186,6 +190,7 @@ Wick.Project = class extends Wick.Base {
         data.width = this.width;
         data.height = this.height;
         data.backgroundColor = this.backgroundColor.rgba;
+        data.transparentBackground = this.transparentBackground;
         data.framerate = this.framerate;
 
         data.onionSkinEnabled = this.onionSkinEnabled
@@ -281,6 +286,19 @@ Wick.Project = class extends Wick.Base {
 
     set backgroundColor(backgroundColor) {
         this._backgroundColor = backgroundColor;
+    }
+
+    /**
+     * If true, the stage is not painted at all and renders with alpha. backgroundColor is
+     * kept around as the matte/preview color for the formats that have to flatten.
+     * @type {boolean}
+     */
+    get transparentBackground() {
+        return this._transparentBackground;
+    }
+
+    set transparentBackground(transparentBackground) {
+        this._transparentBackground = !!transparentBackground;
     }
 
     get hitTestOptions() {
@@ -1617,7 +1635,8 @@ Wick.Project = class extends Wick.Base {
     inject(element) {
         this.view.canvasContainer = element;
         this.view.fitMode = 'fill';
-        this.view.canvasBGColor = this.backgroundColor.hex;
+        // A transparent project leaves the canvas see-through so the host page shows through.
+        this.view.canvasBGColor = this.transparentBackground ? null : this.backgroundColor.hex;
 
         window.onresize = function() {
             project.view.resize();
@@ -1767,21 +1786,36 @@ Wick.Project = class extends Wick.Base {
      * Create a sequence of images from every frame in the project.
      * @param {object} args - Options for generating the image sequence
      * @param {string} imageType - MIMEtype to use for rendered images. Defaults to 'image/png'.
+     * @param {string} frameFormat - 'image' (default) hands back loaded Image objects, 'raw' hands
+     *                               back {data, width, height} pixel buffers, which is what the
+     *                               video encoder wants and skips a base64 round trip.
+     * @param {function} onFrame - Optional. Called as (frame, index) with each frame as it is
+     *                             rendered. When given, frames are handed over one at a time and
+     *                             are *not* accumulated - the caller is expected to encode or
+     *                             compress each one and let it go, which is what keeps a long
+     *                             render from holding every raw frame in memory at once. It may
+     *                             return a promise, and the next frame waits on it. onFinish then
+     *                             receives an empty array.
      * @param {function} onProgress - Function to call for each image loaded, useful for progress bars
      * @param {function} onFinish - Function to call when the images are all loaded.
+     * @param {function} onError - Optional. Called if onFrame rejects; the project is restored first.
      */
     generateImageSequence (args) {
         if(!args) args = {};
         if(!args.imageType) args.imageType = 'image/png';
+        if(!args.frameFormat) args.frameFormat = 'image';
         if(!args.onProgress) args.onProgress = () => {};
         if(!args.onFinish) args.onFinish = () => {};
         if(!args.width) args.width = this.width;
         if(!args.height) args.height = this.height;
 
-        
+        // JPEG has no alpha channel, so a transparent project has to render as PNG.
+        if(this.transparentBackground) args.imageType = 'image/png';
 
         var renderCopy = this;
-        renderCopy.renderBlackBars = true; // Turn off black bars (removes black lines)
+        // Black bars are opaque, so they'd punch holes in a transparent render.
+        var oldRenderBlackBars = this.renderBlackBars;
+        renderCopy.renderBlackBars = !this.transparentBackground;
 
         var oldCanvasContainer = this.view.canvasContainer;
 
@@ -1823,40 +1857,97 @@ Wick.Project = class extends Wick.Base {
 
         var frameImages = [];
         var numMaxFrameImages = renderCopy.focus.timeline.length;
-        var renderFrame = () => {
-            var frameImage = new Image();
+        var frameIndex = 0;
 
-            frameImage.onload = () => {
-                frameImages.push(frameImage);
+        // Put the project back the way we found it. Runs on the way out whether the
+        // render finished or a consumer blew up partway through.
+        var restoreProject = () => {
+            // reset autoUpdate back to normal
+            renderCopy.view.paper.view.autoUpdate = true;
 
-                var currentPos = renderCopy.focus.timeline.playheadPosition;
-                args.onProgress(currentPos, numMaxFrameImages);
+            this.view.canvasContainer = oldCanvasContainer;
+            this.view.resize();
 
-                if (currentPos >= numMaxFrameImages) {
-                    // reset autoUpdate back to normal
-                    renderCopy.view.paper.view.autoUpdate = true;
+            this.history.loadSnapshot('before-gif-render');
+            this.publishedMode = false;
+            this.renderBlackBars = oldRenderBlackBars;
+            this.view.render();
 
-                    this.view.canvasContainer = oldCanvasContainer;
-                    this.view.resize();
+            window.document.body.removeChild(container);
+        }
 
-                    this.history.loadSnapshot('before-gif-render');
-                    this.publishedMode = false;
-                    this.view.render();
+        var advance = () => {
+            var currentPos = renderCopy.focus.timeline.playheadPosition;
+            args.onProgress(currentPos, numMaxFrameImages);
 
-                    window.document.body.removeChild(container);
+            if (currentPos >= numMaxFrameImages) {
+                restoreProject();
+                args.onFinish(frameImages);
+            } else {
+                var oldPlayhead = renderCopy.activeTimeline.playheadPosition
+                renderCopy.tick();
+                renderCopy.activeTimeline.playheadPosition = oldPlayhead + 1;
+                renderFrame();
+            }
+        }
 
-                    args.onFinish(frameImages);
-                } else {
-                    var oldPlayhead = renderCopy.activeTimeline.playheadPosition
-                    renderCopy.tick();
-                    renderCopy.activeTimeline.playheadPosition = oldPlayhead + 1;
-                    renderFrame();
+        var onFrameCaptured = (frame) => {
+            if (args.onFrame) {
+                var handled;
+                try {
+                    handled = args.onFrame(frame, frameIndex++);
+                } catch (error) {
+                    restoreProject();
+                    args.onError ? args.onError(error) : console.error(error);
+                    return;
                 }
+
+                if (handled && typeof handled.then === 'function') {
+                    handled.then(advance, error => {
+                        restoreProject();
+                        args.onError ? args.onError(error) : console.error(error);
+                    });
+                    return;
+                }
+            } else {
+                frameImages.push(frame);
+                frameIndex++;
             }
 
+            advance();
+        }
+
+        var renderFrame = () => {
             renderCopy.view.render();
             renderCopy.view.paper.view.update();
-            frameImage.src = renderCopy.view.canvas.toDataURL(args.imageType);
+
+            var canvas = renderCopy.view.canvas;
+
+            if (args.frameFormat === 'raw') {
+                // Hand back pixels directly. The video encoder needs them, and going through
+                // an Image would cost a base64 encode/decode round trip per frame.
+                var imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+
+                // The container is sized args.width/devicePixelRatio so that the backing store
+                // lands on args.width. Don't trust that silently.
+                if (imageData.width !== args.width || imageData.height !== args.height) {
+                    console.warn('generateImageSequence: asked for ' + args.width + 'x' + args.height
+                        + ' frames but the canvas rendered ' + imageData.width + 'x' + imageData.height + '.');
+                }
+
+                // Don't recurse synchronously - the stack would grow with the frame count.
+                window.setTimeout(() => {
+                    onFrameCaptured({
+                        data: imageData.data,
+                        width: imageData.width,
+                        height: imageData.height,
+                    });
+                }, 0);
+            } else {
+                var frameImage = new Image();
+                frameImage.onload = () => onFrameCaptured(frameImage);
+                frameImage.src = canvas.toDataURL(args.imageType);
+            }
         }
 
         this.resetSoundsPlayed();

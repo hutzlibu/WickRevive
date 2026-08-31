@@ -80,10 +80,32 @@
  }
 
  .project-settings-property-container {
-  height: 30px; 
-  display: flex; 
+  height: 30px;
+  display: flex;
   flex-direction: row;
  }
+
+.project-settings-transparent-background {
+  margin-top: 8px;
+  color: $editor-modal-text-gray;
+
+  .wick-checkbox-container {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .wick-checkbox-label {
+    margin-bottom: 0;
+    margin-left: 6px;
+    cursor: pointer;
+  }
+
+  .wick-checkbox {
+    cursor: pointer;
+  }
+}
 
  .project-settings-modal-cancel {
    width: 80px; 

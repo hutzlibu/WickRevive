@@ -34,6 +34,19 @@ Wick.View.Project = class extends Wick.View {
         return '#CCCCCC';
     }
 
+    /* Editor-only checkerboard shown behind a transparent stage. */
+    static get CHECKERBOARD_SIZE() {
+        return 8;
+    }
+
+    static get CHECKERBOARD_COLOR_A() {
+        return '#ffffff';
+    }
+
+    static get CHECKERBOARD_COLOR_B() {
+        return '#d6d6d6';
+    }
+
     static get ORIGIN_CROSSHAIR_SIZE() {
         return 100;
     }
@@ -68,6 +81,8 @@ Wick.View.Project = class extends Wick.View {
 
         this._svgCanvas = null;
         this._svgBackgroundLayer = null;
+        this._checkerboardRaster = null;
+        this._checkerboardCacheKey = null;
         this._svgBordersLayer = null;
         this._svgGUILayer = null;
 
@@ -294,8 +309,16 @@ Wick.View.Project = class extends Wick.View {
 
     _updateCanvasContainerBGColor() {
         if (this.model.focus === this.model.root) {
-            // We're in the root timeline, use the color given to us from the user (or use a default)
-            this.canvas.style.backgroundColor = this.canvasBGColor || Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
+            if (this.model.transparentBackground && this.model.isPublished) {
+                // A published transparent project lets whatever is behind the canvas show through.
+                this.canvas.style.backgroundColor = 'transparent';
+            } else {
+                // We're in the root timeline, use the color given to us from the user (or use a default)
+                this.canvas.style.backgroundColor = this.canvasBGColor || Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
+            }
+        } else if (this.model.transparentBackground) {
+            // We're inside a clip and there is no background color to borrow, so use the editor default.
+            this.canvas.style.backgroundColor = Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
         } else {
             // We're inside a clip, so use the project background color as the container background color
             this.canvas.style.backgroundColor = this.model.backgroundColor.hex;
@@ -401,14 +424,47 @@ Wick.View.Project = class extends Wick.View {
         }
 
         // Render black bars (for published projects)
-        if(this.model.isPublished && this.model.renderBlackBars) {
+        // A transparent project must not get opaque black painted over its edges.
+        if(this.model.isPublished && this.model.renderBlackBars && !this.model.transparentBackground) {
             this._svgBordersLayer.removeChildren();
             this._svgBordersLayer.addChildren(this._generateSVGBorders());
             this.paper.project.addLayer(this._svgBordersLayer);
         }
     }
 
+    /**
+     * Export the current paper scope as an SVG string.
+     * @param {object} options - passed straight through to paper's exportSVG
+     * @returns {string}
+     */
+    exportSVG(options) {
+        // paper exports every layer in the scope, the project background included. When the
+        // project is transparent that background is an editor-only checkerboard raster, and
+        // it must not get baked into the file (paper would embed it as a base64 image, and
+        // marking it invisible isn't enough - it exports hidden items too).
+        var backgroundLayer = this._svgBackgroundLayer;
+        var hideBackground = this.model.transparentBackground &&
+            this.paper.project.layers.indexOf(backgroundLayer) !== -1;
+
+        if (hideBackground) backgroundLayer.remove();
+
+        var svg = this.paper.project.exportSVG(options);
+
+        if (hideBackground) this.paper.project.insertLayer(0, backgroundLayer);
+
+        return svg;
+    }
+
     _generateSVGCanvasStage() {
+        if (this.model.transparentBackground) {
+            // Published: paint nothing at all, so the stage renders with alpha.
+            // In the editor: a checkerboard, so the stage bounds are still visible and
+            // "transparent" doesn't look like "white".
+            return this.model.isPublished
+                ? new this.paper.Group({ insert: false })
+                : this._generateSVGCheckerboardStage();
+        }
+
         var stage = new paper.Path.Rectangle(
             new this.paper.Point(0, 0),
             new this.paper.Point(this.model.width, this.model.height),
@@ -417,6 +473,52 @@ Wick.View.Project = class extends Wick.View {
         stage.fillColor = this.model.backgroundColor.rgba;
 
         return stage;
+    }
+
+    /* Editor-only stand-in for a transparent stage. */
+    _generateSVGCheckerboardStage() {
+        var width = this.model.width;
+        var height = this.model.height;
+        var cacheKey = width + 'x' + height;
+
+        // paper.js fillColor takes no pattern, so the checkerboard is a raster of an
+        // offscreen canvas. Both are cached and only rebuilt when the stage is resized -
+        // and the raster is reused rather than recreated, so only one ever references
+        // the canvas (paper hands a raster's canvas back to its own pool when the raster
+        // is given a different image).
+        if (!this._checkerboardRaster || this._checkerboardCacheKey !== cacheKey) {
+            var size = Wick.View.Project.CHECKERBOARD_SIZE;
+            var canvas = window.document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = Wick.View.Project.CHECKERBOARD_COLOR_A;
+            ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = Wick.View.Project.CHECKERBOARD_COLOR_B;
+            for (var y = 0; y < height; y += size) {
+                var offset = ((y / size) % 2 === 0) ? 0 : size;
+                for (var x = offset; x < width; x += size * 2) {
+                    ctx.fillRect(x, y, size, size);
+                }
+            }
+
+            if (this._checkerboardRaster) this._checkerboardRaster.remove();
+
+            // `new paper.Raster(canvas)` does not do what it looks like: paper only
+            // recognises an <img> as an image, and reads anything else as a Size, handing
+            // back a *blank* canvas of those dimensions. Assign the image afterwards.
+            var raster = new paper.Raster({insert: false});
+            raster.image = canvas;
+            raster.smoothing = false;
+
+            this._checkerboardRaster = raster;
+            this._checkerboardCacheKey = cacheKey;
+        }
+
+        this._checkerboardRaster.position = new this.paper.Point(width / 2, height / 2);
+
+        return this._checkerboardRaster;
     }
 
     _generateSVGOriginCrosshair() {

@@ -357,8 +357,11 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
      * @param {number} x - The x position on the screen.
      * @param {number} y - The y position on the screen.
      * @returns {object|null} A description of what was right clicked, of the shape {type},
-     * where type is 'frame', 'tween', or 'empty' (a cell with no frame in it). Empty targets
-     * also carry {playheadPosition, layerIndex}. Returns null if there's nothing right
+     * where type is 'frame', 'tween', or 'empty' (a cell with no frame in it). Frame and tween
+     * targets also carry the {uuid} of the clicked object, so that a menu can act on exactly
+     * what was clicked instead of going through the selection (right clicking something that
+     * was already selected deliberately leaves the rest of the selection alone). Empty targets
+     * carry {playheadPosition, layerIndex} instead. Returns null if there's nothing right
      * clickable at that position.
      */
     rightClickAtPosition (x, y) {
@@ -375,11 +378,11 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
         if(model instanceof Wick.Tween) {
             this.model.activeTimeline.playheadPosition = model.playheadPosition + model.parentFrame.start - 1;
             this._selectRightClickedObject(model);
-            return {type: 'tween'};
+            return {type: 'tween', uuid: model.uuid};
         } else if (model instanceof Wick.Frame) {
             this.model.activeTimeline.playheadPosition = model.start + Math.floor(target.localMouse.x / this.gridCellWidth);
             this._selectRightClickedObject(model);
-            return {type: 'frame'};
+            return {type: 'frame', uuid: model.uuid};
         } else if (target instanceof Wick.GUIElement.FramesContainer && target.addFrameOverlayIsActive()) {
             // An empty cell: there's nothing to select, but a frame can be added here.
             this.model.selection.clear();

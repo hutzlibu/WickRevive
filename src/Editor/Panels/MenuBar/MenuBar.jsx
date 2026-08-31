@@ -50,15 +50,19 @@ class MenuBar extends Component {
 
         <div className="menu-bar-actions-container">
 
+          {/* Embedded, the host owns the document: new/open/save all produce a
+              result the host never sees, so they are replaced by "done". */}
+          {!this.props.embedded &&
           <MenuBarButton
             text="new"
             action={this.props.openNewProjectConfirmation}
-          />
+          />}
 
+          {!this.props.embedded &&
           <MenuBarButton
             text="open"
             action={this.props.openProjectFileDialog}
-          />
+          />}
 
           <MenuBarButton
             text="export"
@@ -72,11 +76,21 @@ class MenuBar extends Component {
             action={() => this.props.exportProjectAsStandaloneHTML({})}
           />
 
+          {!this.props.embedded &&
           <MenuBarButton
             text="save"
             action={this.props.exportProjectAsWickFile}
             color='save'
-          />
+          />}
+
+          {this.props.embedded &&
+          <MenuBarButton
+            id="menu-bar-done-button"
+            text="done"
+            tooltip="Hand this back to the page that opened the editor"
+            action={this.props.requestEmbedClose}
+            color='save'
+          />}
 
           <MenuBarIconButton
             icon="gear"
@@ -106,8 +120,8 @@ class MenuBar extends Component {
 
         <div className="menu-bar-actions-container">
           <MenuBarButton
-            text="save"
-            action={this.props.exportProjectAsWickFile}
+            text={this.props.embedded ? "done" : "save"}
+            action={this.props.embedded ? this.props.requestEmbedClose : this.props.exportProjectAsWickFile}
             color='save'
           />
         </div>

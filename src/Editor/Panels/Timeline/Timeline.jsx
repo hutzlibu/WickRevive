@@ -142,9 +142,29 @@ class Timeline extends Component {
       ? () => this.addFrame(target.playheadPosition, target.layerIndex)
       : editor.insertBlankFrame;
 
+    // The frame that was right clicked, taken from the target rather than the selection so
+    // that the tween items act on the clicked cell even when more than one frame is selected.
+    let clicked = target.uuid && window.Wick.ObjectCache.getObjectByUUID(target.uuid);
+    let clickedFrame = null;
+    if(target.type === 'frame') {
+      clickedFrame = clicked;
+    } else if(target.type === 'tween' && clicked) {
+      clickedFrame = clicked.parentFrame;
+    }
+
+    // rightClickAtPosition parks the playhead on the clicked cell, so this finds the clicked
+    // tween whether the click landed on the tween marker itself or elsewhere in its cell.
+    let clickedTween = clickedFrame && clickedFrame.getTweenAtCurrentPlayheadPosition();
+
+    // A tween drives the clips on its frame, so there has to be something there to move.
+    let canPasteTween = !!(editor.tweenClipboard && clickedFrame && clickedFrame.contentful);
+
     return [
       {label: 'Add Frame', icon: 'add', action: addFrame, hotkey: isEmptyCell ? null : hotkeyOf('insert-blank-frame')},
       {label: 'Add Tween', icon: 'tween', action: editor.createTween, hotkey: hotkeyOf('create-tween'), disabled: !project.canCreateTween},
+      {divider: true},
+      {label: 'Copy Tween', icon: 'copy', action: () => editor.copyTween(clickedTween), disabled: !clickedTween},
+      {label: 'Paste Tween', icon: 'paste', action: () => editor.pasteTween(clickedFrame), disabled: !canPasteTween},
       {divider: true},
       {label: 'Delete', icon: 'delete', action: editor.deleteSelectedObjects, hotkey: hotkeyOf('delete'), danger: true, disabled: isEmptyCell},
     ];

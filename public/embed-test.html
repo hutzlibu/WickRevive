@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><title>wick embed export harness</title></head>
 <body>
 <pre id="out">starting</pre>
-<iframe id="ed" src="/index.html" style="width:900px;height:700px;border:1px solid #ccc"></iframe>
+<iframe id="ed" src="index.html?embed=1" style="width:900px;height:700px;border:1px solid #ccc"></iframe>
 <script>
 const out = document.getElementById('out');
 const log = m => {
@@ -19,13 +19,65 @@ async function run () {
   for (let i = 0; i < 600 && !w.wickEditorReady; i++) await new Promise(r => setTimeout(r, 100));
   if (!w.wickEditorReady) { log('FAIL: wickEditorReady never appeared'); return; }
   await w.wickEditorReady;
-  log('READY globals=' + ['makeWickHtmlExport','makeWickSvgExport','makeWickGifExport','makeWickMp4Export','makeWickPngSequenceExport']
+  log('READY globals=' + ['makeWickHtmlExport','makeWickSvgExport','makeWickGifExport','makeWickMp4Export',
+        'makeWickPngSequenceExport','makeWickProjectData','loadWickProjectData','newWickProject',
+        'getWickProjectInfo','getWickProjectRevision','getWickApiVersion']
         .map(k => k + ':' + (typeof w[k])).join(' '));
 
   const only = new URLSearchParams(location.search).get('only');
-  const want = only ? only.split(',') : ['html', 'svg', 'png', 'gif'];
+  const want = only ? only.split(',')
+                    : ['version', 'info', 'revision', 'newproject', 'transparent', 'badformat',
+                       'html', 'svg', 'svgalpha', 'png', 'gif'];
 
   const cases = {
+    version: async () => {
+      const v = w.getWickApiVersion();
+      return 'v' + v + ' isInteger=' + Number.isInteger(v);
+    },
+    info: async () => {
+      const i = w.getWickProjectInfo();
+      const keys = ['width','height','framerate','frameCount','durationMs','name',
+                    'transparentBackground','backgroundColor'];
+      return keys.map(k => k + '=' + i[k]).join(' ') +
+             ' missing=' + keys.filter(k => i[k] === undefined).join(',');
+    },
+    revision: async () => {
+      // Any mutation goes through projectDidChange, so any of them bumps this.
+      const before = w.getWickProjectRevision();
+      w.editor.projectDidChange({actionName: 'embed-test'});
+      const after = w.getWickProjectRevision();
+      return before + ' -> ' + after + ' bumped=' + (after > before);
+    },
+    newproject: async () => {
+      await w.newWickProject({width: 321, height: 123, framerate: 24, name: 'embed-test'});
+      const i = w.getWickProjectInfo();
+      return 'now ' + i.width + 'x' + i.height + ' @' + i.framerate + 'fps "' + i.name + '"' +
+             ' asRequested=' + (i.width === 321 && i.height === 123 && i.framerate === 24);
+    },
+    transparent: async () => {
+      // The flag has to survive a .wick round trip, or a host loses it on reload.
+      await w.newWickProject({width: 200, height: 200, transparent: true, name: 'embed-test-alpha'});
+      const created = w.getWickProjectInfo().transparentBackground;
+
+      const data = await w.makeWickProjectData({format: 'base64'});
+      await w.loadWickProjectData(data, {format: 'base64'});
+      const roundTripped = w.getWickProjectInfo().transparentBackground;
+
+      await w.newWickProject({width: 200, height: 200, name: 'embed-test-opaque'});
+      const defaultsOpaque = w.getWickProjectInfo().transparentBackground === false;
+
+      return 'created=' + created + ' roundTripped=' + roundTripped +
+             ' defaultsOpaque=' + defaultsOpaque;
+    },
+    badformat: async () => {
+      // An unknown video format should be rejected up front, not deep in a callback.
+      try {
+        await w.makeWickMp4Export({format: 'webm'});
+        return 'FAIL: no error thrown';
+      } catch (e) {
+        return 'rejected="' + e.message + '"';
+      }
+    },
     html: async () => {
       const h = await w.makeWickHtmlExport();
       return 'string len=' + h.length + ' doctype=' + h.startsWith('<!DOCTYPE html>') +
@@ -35,6 +87,21 @@ async function run () {
     svg: async () => {
       const s = await w.makeWickSvgExport();
       return 'string len=' + s.length + ' isSvg=' + s.trim().startsWith('<svg');
+    },
+    svgalpha: async () => {
+      // The editor draws a checkerboard raster behind a transparent stage; paper's
+      // exportSVG dumps every layer, so it must be left out or it gets baked in as a
+      // base64 image. An opaque project keeps its background rect as before.
+      await w.newWickProject({width: 200, height: 200, transparent: true, name: 'alpha'});
+      const alpha = await w.makeWickSvgExport();
+
+      await w.newWickProject({width: 200, height: 200, name: 'opaque'});
+      const opaque = await w.makeWickSvgExport();
+
+      return 'transparent: len=' + alpha.length +
+             ' embedsRaster=' + alpha.includes('data:image') +
+             ' hasBgLayer=' + alpha.includes('wick_project_bg') +
+             ' | opaque: hasBgLayer=' + opaque.includes('wick_project_bg');
     },
     png: async () => {
       let last = '';
@@ -49,9 +116,45 @@ async function run () {
     mp4: async () => {
       let last = '';
       const b = await w.makeWickMp4Export({onProgress: (m, p) => { last = m + ' ' + Number(p).toFixed(0) + '%'; }});
+      return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"' +
+             ' | ' + await playable(b);
+    },
+    // The two alpha video paths. Slow, so they are opt-in via ?only= like mp4 is.
+    mov: async () => {
+      await w.newWickProject({width: 120, height: 80, transparent: true, name: 'alpha'});
+      let last = '';
+      const b = await w.makeWickMp4Export({format: 'mov',
+        onProgress: (m, p) => { last = m + ' ' + Number(p).toFixed(0) + '%'; }});
       return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"';
     },
+    matte: async () => {
+      await w.newWickProject({width: 120, height: 80, transparent: true, name: 'alpha'});
+      let last = '';
+      const b = await w.makeWickMp4Export({format: 'mp4matte',
+        onProgress: (m, p) => { last = m + ' ' + Number(p).toFixed(0) + '%'; }});
+      return 'blob ' + b.size + 'b type=' + b.type + ' lastProgress="' + last + '"' +
+             ' | ' + await playable(b);
+    },
   };
+
+  // The point of the H.264 path: can this browser actually play what came back?
+  // A .mov never can, so it isn't asked.
+  async function playable (blob) {
+    const url = URL.createObjectURL(blob);
+    const v = document.createElement('video');
+    v.muted = true;
+    v.src = url;
+    try {
+      return await new Promise(resolve => {
+        v.onloadedmetadata = () => resolve('PLAYS ' + v.videoWidth + 'x' + v.videoHeight +
+                                           ' ' + v.duration.toFixed(2) + 's');
+        v.onerror = () => resolve('UNPLAYABLE: ' + (v.error && v.error.message));
+        setTimeout(() => resolve('UNPLAYABLE: timed out'), 8000);
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
 
   for (const name of want) {
     const t = Date.now();

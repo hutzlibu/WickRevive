@@ -40,9 +40,33 @@ class ExportOptions extends Component {
       exportResolution: "1080p",
       blackBars: true,
       useAdvanced: false,
+      videoFormat: 'mp4',
     }
 
     this.customSizeTag = "custom";
+
+    // Only offered when the project has a transparent background - see
+    // export/VideoExport.js for what each of these actually produces.
+    this.videoFormatOptions = [
+      { value: 'mp4',      label: 'MP4' },
+      { value: 'mov',      label: 'MOV (transparent)' },
+      { value: 'mp4matte', label: 'MP4 + alpha matte' },
+    ];
+
+    this.videoFormatInfo = {
+      mp4: {
+        file:  "Creates an .mp4 file",
+        alpha: { text: "Flattened onto the matte color", icon: "cancel" },
+      },
+      mov: {
+        file:  "Creates a .mov file",
+        alpha: { text: "Transparent, but not web-playable", icon: "check" },
+      },
+      mp4matte: {
+        file:  "Creates an .mp4 file",
+        alpha: { text: "Alpha packed below the image", icon: "check" },
+      },
+    };
 
     // If size is not represented, default to "custom".
     this.advancedSizes = {
@@ -93,7 +117,7 @@ class ExportOptions extends Component {
     if (type === 'GIF') {
       this.props.exportProjectAsGif(args);
     } else if (type === 'VIDEO') {
-      this.props.exportProjectAsVideo(args);
+      this.props.exportProjectAsVideo({...args, format: this.videoFormat()});
     } else if (type === 'ZIP') {
       this.props.exportProjectAsStandaloneZip(args);
       this.props.toggle();
@@ -271,17 +295,54 @@ class ExportOptions extends Component {
     )
   }
 
+  /* Only a transparent project has anything to choose between. */
+  transparentProject = () => {
+    return !!(this.props.project && this.props.project.transparentBackground);
+  }
+
+  videoFormat = () => {
+    return this.transparentProject() ? this.state.videoFormat : 'mp4';
+  }
+
   renderVideoObject = () => {
+    let transparent = this.transparentProject();
+    let info = this.videoFormatInfo[this.videoFormat()];
+
+    // The info box is a fixed height, so the alpha row replaces the least
+    // informative of the three rather than being added to them.
+    let rows = transparent
+      ? [
+          { text: info.file,          icon: "check" },
+          info.alpha,
+          { text: "Has Sound",        icon: "check" },
+        ]
+      : [
+          { text: info.file,          icon: "check" },
+          { text: "Has Sound",        icon: "check" },
+          { text: "Not Interactive",  icon: "cancel"},
+        ];
+
     return (
       <div className={classNames("export-info-item", this.props.isMobile && "mobile")}>
         <ObjectInfo
           className="export-object-info"
           title="Video (Beta)"
-          rows={[
-            { text: "Creates an .mp4 file", icon: "check" },
-            { text: "Has Sound",            icon: "check" },
-            { text: "Not Interactive",       icon: "cancel"},
-          ]}/>
+          rows={rows}/>
+        {transparent &&
+          <div className="export-modal-video-format">
+            <label htmlFor="export-video-format" className="export-modal-advanced-option-title">
+              Format
+            </label>
+            <div className="export-modal-video-format-input">
+              <WickInput
+                id="export-video-format"
+                type="select"
+                value={this.state.videoFormat}
+                options={this.videoFormatOptions}
+                onChange={(option) => this.setState({videoFormat: option.value})} />
+            </div>
+          </div>
+        }
         <div className="export-modal-button-container">
           <ActionButton
             color='gray-green'

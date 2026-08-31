@@ -106,6 +106,21 @@ $info-left-margin: 12px;
   margin-top: 10px;
 }
 
+.export-modal-video-format {
+  width: 100%;
+  margin-top: 10px;
+
+  .export-modal-advanced-option-title {
+    font-size: 14px;
+    margin-bottom: 0;
+  }
+
+  /* .wick-input-select is height:100%, so it needs a sized box to live in. */
+  .export-modal-video-format-input {
+    height: 30px;
+  }
+}
+
 .export-object-info {
   height: 120px; 
 }

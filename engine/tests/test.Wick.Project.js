@@ -131,6 +131,42 @@ describe('Wick.Project', function() {
         });
     });
 
+    describe('#transparentBackground', function () {
+        it('should default to false', function () {
+            expect(new Wick.Project().transparentBackground).to.equal(false);
+        });
+
+        it('should be settable from the constructor', function () {
+            expect(new Wick.Project({transparentBackground: true}).transparentBackground).to.equal(true);
+        });
+
+        it('should survive a serialize/deserialize round trip', function () {
+            Wick.ObjectCache.clear();
+
+            var project = new Wick.Project({transparentBackground: true});
+            var data = project.serialize();
+
+            expect(data.transparentBackground).to.equal(true);
+            expect(Wick.Project.fromData(data).transparentBackground).to.equal(true);
+        });
+
+        it('should default to false on project data that predates the flag', function () {
+            Wick.ObjectCache.clear();
+
+            var data = new Wick.Project().serialize();
+            delete data.transparentBackground;
+
+            expect(Wick.Project.fromData(data).transparentBackground).to.equal(false);
+        });
+
+        it('should keep the background color around as the matte color', function () {
+            var project = new Wick.Project({transparentBackground: true});
+            project.backgroundColor = new Wick.Color('#ff00ff');
+
+            expect(project.backgroundColor.hex).to.equal('#ff00ff');
+        });
+    });
+
     describe('#focus', function () {
         it('should clear selection when focus is changed', function () {
             var project = new Wick.Project();

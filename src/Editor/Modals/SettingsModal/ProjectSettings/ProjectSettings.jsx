@@ -67,12 +67,13 @@ class ProjectSettings extends Component {
       height: this.props.project.height,
       framerate: this.props.project.framerate,
       backgroundColor: this.props.project.backgroundColor.rgba,
+      transparentBackground: this.props.project.transparentBackground,
       preset: this.getPreset(this.props.project.width, this.props.project.height),
     }
   }
 
   componentDidUpdate = (prevProps) => {
-    let values = ['name', 'width', 'height', 'framerate', 'backgroundColor'];
+    let values = ['name', 'width', 'height', 'framerate', 'backgroundColor', 'transparentBackground'];
     let different = false;
     values.forEach((value) => {
       if (prevProps.project[value] !== this.props.project[value]) {
@@ -137,12 +138,19 @@ class ProjectSettings extends Component {
     });
   }
 
+  changeTransparentBackground = (e) => {
+    this.setState({
+      transparentBackground: e.target.checked,
+    });
+  }
+
   acceptProjectSettings = () => {
     let newSettings = {
       name: this.state.name === '' ? this.defaultName : this.state.name,
       width: this.state.width,
       height: this.state.height,
       backgroundColor: new window.Wick.Color(this.state.backgroundColor),
+      transparentBackground: this.state.transparentBackground,
       framerate: this.state.framerate,
     }
 
@@ -157,6 +165,7 @@ class ProjectSettings extends Component {
       height: this.props.project.height,
       framerate: this.props.project.framerate,
       backgroundColor: this.props.project.backgroundColor.rgba,
+      transparentBackground: this.props.project.transparentBackground,
       preset: this.getPreset(this.props.project.width, this.props.project.height)
     });
   }
@@ -273,8 +282,13 @@ class ProjectSettings extends Component {
   renderBackgroundColorObject = () => {
     return (
       <div className={classNames("project-setting-element", this.props.isMobile && "mobile")}>
-        <label htmlFor="project-background-color-picker" className="project-settings-property-label">
-          Background Color
+        <label
+          htmlFor="project-background-color-picker"
+          className="project-settings-property-label"
+          title={this.state.transparentBackground
+            ? "What formats that can't store alpha (GIF, plain MP4) flatten onto."
+            : undefined}>
+          {this.state.transparentBackground ? "Matte Color" : "Background Color"}
         </label>
         <div className="project-settings-property-container">
           <WickInput
@@ -288,6 +302,15 @@ class ProjectSettings extends Component {
             changeColorPickerType={this.props.changeColorPickerType}
             updateLastColors={this.props.updateLastColors}
             lastColorsUsed={this.props.lastColorsUsed} />
+        </div>
+        <div
+          className="project-settings-transparent-background"
+          title="The stage renders with alpha instead of a background color.">
+          <WickInput
+            type="checkbox"
+            checked={this.state.transparentBackground}
+            onChange={this.changeTransparentBackground}
+            label="Transparent background" />
         </div>
       </div>
     );

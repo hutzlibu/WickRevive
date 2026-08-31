@@ -166,9 +166,14 @@ Wick.Timeline = class extends Wick.Base {
      * @returns {string} - the SVG for the current view in string form (maybe this should be base64 or a blob or something)
      */
     exportSVG(onError) {
+            var options = { asString: true, matchShapes: true, embedImages: true };
 
-            var svgOutput = paper.project.exportSVG({ asString: true, matchShapes: true, embedImages: true });
-            return svgOutput;
+            // View.Project.exportSVG keeps the transparent-stage checkerboard out of the file.
+            if (this.project && this.project.view) {
+                return this.project.view.exportSVG(options);
+            }
+
+            return paper.project.exportSVG(options);
         }
         //this.project.paper.
         //paperGroup = new paper.Group

@@ -23,6 +23,7 @@ import VideoExport from './export/VideoExport';
 import GIFExport from './export/GIFExport';
 import GIFImport from './import/GIFImport';
 import AudioExport from './export/AudioExport';
+import { isEmbedMode } from './export/EmbedMode';
 
 // Same value as Wick.Tools.Cursor's SELECTION_TOLERANCE.
 const CANVAS_SELECTION_TOLERANCE = 3;
@@ -812,10 +813,10 @@ class EditorCore extends Component {
 
   /**
    * Updates the Wick Project settings with new values passed in as an object. Will make no changes if input is invalid or the same as the previous settings.
-   * @param {object} newSettings an object containing all of the settings to update within the project. Accepts valid project settings such as 'name', 'width', 'height', 'framerate', and 'backgroundColor'.
+   * @param {object} newSettings an object containing all of the settings to update within the project. Accepts valid project settings such as 'name', 'width', 'height', 'framerate', 'backgroundColor' and 'transparentBackground'.
    */
   updateProjectSettings = (newSettings) => {
-    let validKeys = ["name", "width", "height", "backgroundColor", "framerate"];
+    let validKeys = ["name", "width", "height", "backgroundColor", "transparentBackground", "framerate"];
     let updated = false;
 
     Object.keys(newSettings).forEach(key => {
@@ -1210,6 +1211,9 @@ class EditorCore extends Component {
    * Export the current project as a video.
    */
   exportProjectAsVideo = (args) => {
+    let formatInfo = VideoExport.VIDEO_FORMATS[args.format];
+    let formatLabel = formatInfo ? formatInfo.label : '.mp4';
+
     // Open export media loading bar modal.
     this.openModal('ExportMedia');
     this.setState({
@@ -1235,7 +1239,7 @@ class EditorCore extends Component {
     let onFinish = (message) => {
       this.updateToast(toastID, {
         type: 'success',
-        text: "Successfully created .mp4 file." });
+        text: "Successfully created " + formatLabel + " file." });
       console.log("Video Render Complete: ", message);
 
       this.setState({
@@ -1246,6 +1250,7 @@ class EditorCore extends Component {
     // this.showWaitOverlay('Rendering video...');
     VideoExport.renderVideo({
       project: this.project,
+      format: args.format,
       width: args.width,
       height: args.height,
       onProgress: onProgress,
@@ -1560,6 +1565,10 @@ class EditorCore extends Component {
    * Save the current project in localstorage
    */
   autoSaveProject = (callback) => {
+    // Autosave is a single shared slot. Embedded, the host owns persistence and
+    // hands over many documents through the same editor, so every one of them
+    // would write over the same slot — worse than redundant.
+    if (isEmbedMode()) return;
     if (!this.project) return;
     if (this.state.previewPlaying) return;
     if (this.state.activeModalName !== null) return;
@@ -1800,6 +1809,76 @@ class EditorCore extends Component {
   createTween = () => {
       this.project.createTween();
       this.projectDidChange({ actionName: "Create Tween" });
+  }
+
+  /**
+   * The pose most recently copied by copyTween, or null if nothing has been copied yet.
+   * This is a clipboard, not rendered state, so it deliberately stays off of React state.
+   * @type {object|null}
+   */
+  tweenClipboard = null;
+
+  /**
+   * Copies a tween's pose - its transformation, plus the easing and rotation count that
+   * describe how the animation leaves it - so that pasteTween can reproduce it elsewhere.
+   * @param {Wick.Tween} tween - the tween to copy.
+   */
+  copyTween = (tween) => {
+    if(!tween) {
+      this.toast('There is no tween here to copy.', 'warning');
+      return;
+    }
+
+    this.tweenClipboard = {
+      transformation: tween.transformation.values,
+      easingType: tween.easingType,
+      fullRotations: tween.fullRotations,
+    };
+
+    // Nothing about the project changed, so there's no projectDidChange here. The right click
+    // menu closes before this runs and rebuilds its items on the next open, so it picks up the
+    // now-enabled "Paste Tween" without a re-render being forced here.
+    this.toast('Tween copied.', 'success');
+  }
+
+  /**
+   * Applies the copied pose to a frame at the current playhead position, creating a tween
+   * there if one doesn't exist yet and overwriting it if one does. This is what makes a
+   * looping animation cheap: copy the tween the loop starts on, then paste it onto the
+   * position the loop should end on, with no transform values typed by hand.
+   * @param {Wick.Frame} frame - the frame to paste the pose onto.
+   */
+  pasteTween = (frame) => {
+    if(!frame || !this.tweenClipboard) {
+      this.toast('There is no copied tween to paste.', 'warning');
+      return;
+    }
+
+    // Go through createTween rather than building a Wick.Tween directly: a frame's tweens are
+    // applied to *every* clip on that frame, so loose paths have to be lumped into a single
+    // clip first. createTween is what does that lumping for "Add Tween", and a second path
+    // that skipped it would leave frames a tween can't animate correctly.
+    frame.createTween();
+
+    var tween = frame.getTweenAtCurrentPlayheadPosition();
+    if(!tween) {
+      this.toast('Could not paste the tween here.', 'error');
+      return;
+    }
+
+    tween.transformation = new window.Wick.Transformation(this.tweenClipboard.transformation);
+    tween.easingType = this.tweenClipboard.easingType;
+    tween.fullRotations = this.tweenClipboard.fullRotations;
+
+    // Tween transforms are otherwise only applied when the playhead moves, and the playhead is
+    // already sitting on the pasted tween - so push the new pose onto the clip by hand,
+    // or the canvas keeps showing the old one.
+    frame.applyTweenTransforms();
+
+    this.project.selection.clear();
+    this.project.selection.select(tween);
+
+    this.projectDidChange({ actionName: "Paste Tween" });
   }
 
   cutFrame = () => {

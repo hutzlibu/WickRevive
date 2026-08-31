@@ -13,6 +13,12 @@
             background: #1a1a1e;
         }
 
+        /* A project with a transparent background is only actually transparent if this
+           page stops painting its own backdrop - then the host page shows through. */
+        html.transparent, html.transparent body {
+            background: transparent;
+        }
+
         #wick-canvas-container {
             width: 100%;
             height: 100%;
@@ -66,10 +72,18 @@
                              data: <base64 .wick>, format: 'base64'}
                             {wickPlayer: 'command', command: 'play'|'pause'|'stop'}
                             {wickPlayer: 'command', command: 'mute'|'unmute'}
+                            {wickPlayer: 'command', command: 'transparent',
+                             value: true|false|null}
             player -> host  {wickPlayer: 'ready'}    engine up, send a project
-                            {wickPlayer: 'loaded', width, height, framerate, frames}
-                            {wickPlayer: 'state', playing, muted}
+                            {wickPlayer: 'loaded', width, height, framerate, frames,
+                                                   transparentBackground}
+                            {wickPlayer: 'state', playing, muted, transparent}
                             {wickPlayer: 'error', message}
+
+        By default the page paints its own dark backdrop, except when the loaded project
+        has a transparent background, in which case the host page shows through. The
+        'transparent' command (value null to go back to following the project) and
+        ?transparent=1 / ?transparent=0 override that either way.
 
         Or standalone: player.html?src=some/project.wick
     -->
@@ -90,6 +104,9 @@
         // open up on the first gesture (unless the host says otherwise).
         var muted = true;
         var mutedByHost = false;
+
+        // Whether this page paints its own backdrop. null means "follow the project".
+        var transparent = null;
 
         Wick.resourcepath = 'corelibs/wick-engine/';
 
@@ -114,7 +131,23 @@
                 wickPlayer: 'state',
                 playing: !!(window.project && window.project._playing),
                 muted: muted,
+                transparent: isTransparent(),
             });
+        }
+
+        function isTransparent () {
+            if (transparent !== null) return transparent;
+            return !!(window.project && window.project.transparentBackground);
+        }
+
+        function applyTransparency () {
+            document.documentElement.className = isTransparent() ? 'transparent' : '';
+        }
+
+        function setTransparent (value) {
+            transparent = (value === null || value === undefined) ? null : !!value;
+            applyTransparency();
+            postState();
         }
 
         /* --- playback ------------------------------------------------------ */
@@ -168,6 +201,7 @@
             if (window.project._playing) window.project.stop();
             window.project = null;
             container.innerHTML = '';
+            applyTransparency();
             // Objects are keyed by uuid in a window-global cache; drop the old
             // project's before loading the next one.
             Wick.ObjectCache.clear();
@@ -200,6 +234,7 @@
 
                 if (muted) project.mute();
                 project.inject(container);
+                applyTransparency();
 
                 status('');
                 post({
@@ -209,6 +244,7 @@
                     framerate: project.framerate,
                     frames: project.root.timeline.length,
                     name: project.name,
+                    transparentBackground: !!project.transparentBackground,
                 });
                 postState();
             }, format === 'base64' ? 'base64' : 'blob');
@@ -261,6 +297,9 @@
                     mutedByHost = false;
                     setMuted(false);
                     break;
+                case 'transparent':
+                    setTransparent(message.value);
+                    break;
                 default:
                     console.warn('Wick player: unknown command "' + message.command + '".');
             }
@@ -272,7 +311,14 @@
             });
         });
 
-        var src = new URLSearchParams(window.location.search).get('src');
+        var params = new URLSearchParams(window.location.search);
+
+        if (params.has('transparent')) {
+            transparent = params.get('transparent') !== '0';
+            applyTransparency();
+        }
+
+        var src = params.get('src');
         if (src) {
             loadFromURL(src);
         } else {

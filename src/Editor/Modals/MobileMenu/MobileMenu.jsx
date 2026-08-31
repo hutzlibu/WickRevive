@@ -20,6 +20,7 @@
 import React, { Component } from 'react';
 import Modal from 'react-modal';
 import ActionButton from 'Editor/Util/ActionButton/ActionButton';
+import { isEmbedMode } from 'Editor/export/EmbedMode';
 
 import './_mobilemenu.scss';
 
@@ -32,8 +33,13 @@ class MobileMenu extends Component {
       overlayClassName: "modal-overlay mobile-menu-overlay",
     };
 
-    let items = [{text: "new", icon: "create-white", action: this.props.openNewProjectConfirmation},
-        {text: "open", icon: "load-white", action: this.props.openProjectFileDialog},
+    // Embedded, the host owns the document — new/open would replace it with
+    // something the host never asked for and never gets told about.
+    let fileItems = isEmbedMode() ? [] :
+        [{text: "new", icon: "create-white", action: this.props.openNewProjectConfirmation},
+        {text: "open", icon: "load-white", action: this.props.openProjectFileDialog}];
+
+    let items = [...fileItems,
         {text: "export", icon: "export", action: () => this.props.openModal('ExportOptions')},
         {text: "settings", icon: "gear-white", action: () => this.props.openModal('SettingsModal')},
         {text: "about", icon: "mascotmarkwhite", action: () => this.props.openModal('EditorInfo')}];

@@ -14,7 +14,7 @@
         <!-- The Wick Engine build is injected here during the engine build step (see gulpfile.js) -->
         <script>
             /*Wick Engine https://github.com/Wicklets/wick-engine*/
-var WICK_ENGINE_BUILD_VERSION = "2026.8.29.14.34.16";
+var WICK_ENGINE_BUILD_VERSION = "2026.8.31.12.42.45";
 /*!
  * Paper.js v0.12.4 - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
@@ -49617,6 +49617,7 @@ Wick.Project = class extends Wick.Base {
    * @param {number} height - Project height in pixels. Default 480.
    * @param {number} framerate - Project framerate in frames-per-second. Default 12.
    * @param {Color} backgroundColor - Project background color in hex. Default #ffffff.
+   * @param {boolean} transparentBackground - If true, the stage renders with alpha instead of backgroundColor. Default false.
    */
   constructor(args) {
     if (!args) args = {};
@@ -49626,6 +49627,7 @@ Wick.Project = class extends Wick.Base {
     this._height = args.height || 480;
     this._framerate = args.framerate || 12;
     this._backgroundColor = args.backgroundColor || new Wick.Color('#ffffff');
+    this._transparentBackground = args.transparentBackground || false;
     this._hitTestOptions = this.getDefaultHitTestOptions();
     this.pan = {
       x: 0,
@@ -49744,6 +49746,8 @@ Wick.Project = class extends Wick.Base {
     this.height = data.height;
     this.framerate = data.framerate;
     this.backgroundColor = new Wick.Color(data.backgroundColor);
+    // Projects saved before transparent backgrounds existed have no key here, and are opaque.
+    this._transparentBackground = data.transparentBackground || false;
     this._focus = data.focus;
     this._hideCursor = false;
     this._muted = false;
@@ -49760,6 +49764,7 @@ Wick.Project = class extends Wick.Base {
     data.width = this.width;
     data.height = this.height;
     data.backgroundColor = this.backgroundColor.rgba;
+    data.transparentBackground = this.transparentBackground;
     data.framerate = this.framerate;
     data.onionSkinEnabled = this.onionSkinEnabled;
     data.onionSkinSeekForwards = this.onionSkinSeekForwards;
@@ -49851,6 +49856,18 @@ Wick.Project = class extends Wick.Base {
   }
   set backgroundColor(backgroundColor) {
     this._backgroundColor = backgroundColor;
+  }
+
+  /**
+   * If true, the stage is not painted at all and renders with alpha. backgroundColor is
+   * kept around as the matte/preview color for the formats that have to flatten.
+   * @type {boolean}
+   */
+  get transparentBackground() {
+    return this._transparentBackground;
+  }
+  set transparentBackground(transparentBackground) {
+    this._transparentBackground = !!transparentBackground;
   }
   get hitTestOptions() {
     return this._hitTestOptions;
@@ -51121,7 +51138,8 @@ Wick.Project = class extends Wick.Base {
   inject(element) {
     this.view.canvasContainer = element;
     this.view.fitMode = 'fill';
-    this.view.canvasBGColor = this.backgroundColor.hex;
+    // A transparent project leaves the canvas see-through so the host page shows through.
+    this.view.canvasBGColor = this.transparentBackground ? null : this.backgroundColor.hex;
     window.onresize = function () {
       project.view.resize();
     };
@@ -51267,19 +51285,35 @@ Wick.Project = class extends Wick.Base {
    * Create a sequence of images from every frame in the project.
    * @param {object} args - Options for generating the image sequence
    * @param {string} imageType - MIMEtype to use for rendered images. Defaults to 'image/png'.
+   * @param {string} frameFormat - 'image' (default) hands back loaded Image objects, 'raw' hands
+   *                               back {data, width, height} pixel buffers, which is what the
+   *                               video encoder wants and skips a base64 round trip.
+   * @param {function} onFrame - Optional. Called as (frame, index) with each frame as it is
+   *                             rendered. When given, frames are handed over one at a time and
+   *                             are *not* accumulated - the caller is expected to encode or
+   *                             compress each one and let it go, which is what keeps a long
+   *                             render from holding every raw frame in memory at once. It may
+   *                             return a promise, and the next frame waits on it. onFinish then
+   *                             receives an empty array.
    * @param {function} onProgress - Function to call for each image loaded, useful for progress bars
    * @param {function} onFinish - Function to call when the images are all loaded.
+   * @param {function} onError - Optional. Called if onFrame rejects; the project is restored first.
    */
   generateImageSequence(args) {
     if (!args) args = {};
     if (!args.imageType) args.imageType = 'image/png';
+    if (!args.frameFormat) args.frameFormat = 'image';
     if (!args.onProgress) args.onProgress = () => {};
     if (!args.onFinish) args.onFinish = () => {};
     if (!args.width) args.width = this.width;
     if (!args.height) args.height = this.height;
-    var renderCopy = this;
-    renderCopy.renderBlackBars = true; // Turn off black bars (removes black lines)
 
+    // JPEG has no alpha channel, so a transparent project has to render as PNG.
+    if (this.transparentBackground) args.imageType = 'image/png';
+    var renderCopy = this;
+    // Black bars are opaque, so they'd punch holes in a transparent render.
+    var oldRenderBlackBars = this.renderBlackBars;
+    renderCopy.renderBlackBars = !this.transparentBackground;
     var oldCanvasContainer = this.view.canvasContainer;
     this.history.saveSnapshot('before-gif-render');
     this.mute();
@@ -51320,32 +51354,85 @@ Wick.Project = class extends Wick.Base {
     renderCopy.view.paper.view.autoUpdate = false;
     var frameImages = [];
     var numMaxFrameImages = renderCopy.focus.timeline.length;
-    var renderFrame = () => {
-      var frameImage = new Image();
-      frameImage.onload = () => {
-        frameImages.push(frameImage);
-        var currentPos = renderCopy.focus.timeline.playheadPosition;
-        args.onProgress(currentPos, numMaxFrameImages);
-        if (currentPos >= numMaxFrameImages) {
-          // reset autoUpdate back to normal
-          renderCopy.view.paper.view.autoUpdate = true;
-          this.view.canvasContainer = oldCanvasContainer;
-          this.view.resize();
-          this.history.loadSnapshot('before-gif-render');
-          this.publishedMode = false;
-          this.view.render();
-          window.document.body.removeChild(container);
-          args.onFinish(frameImages);
-        } else {
-          var oldPlayhead = renderCopy.activeTimeline.playheadPosition;
-          renderCopy.tick();
-          renderCopy.activeTimeline.playheadPosition = oldPlayhead + 1;
-          renderFrame();
+    var frameIndex = 0;
+
+    // Put the project back the way we found it. Runs on the way out whether the
+    // render finished or a consumer blew up partway through.
+    var restoreProject = () => {
+      // reset autoUpdate back to normal
+      renderCopy.view.paper.view.autoUpdate = true;
+      this.view.canvasContainer = oldCanvasContainer;
+      this.view.resize();
+      this.history.loadSnapshot('before-gif-render');
+      this.publishedMode = false;
+      this.renderBlackBars = oldRenderBlackBars;
+      this.view.render();
+      window.document.body.removeChild(container);
+    };
+    var advance = () => {
+      var currentPos = renderCopy.focus.timeline.playheadPosition;
+      args.onProgress(currentPos, numMaxFrameImages);
+      if (currentPos >= numMaxFrameImages) {
+        restoreProject();
+        args.onFinish(frameImages);
+      } else {
+        var oldPlayhead = renderCopy.activeTimeline.playheadPosition;
+        renderCopy.tick();
+        renderCopy.activeTimeline.playheadPosition = oldPlayhead + 1;
+        renderFrame();
+      }
+    };
+    var onFrameCaptured = frame => {
+      if (args.onFrame) {
+        var handled;
+        try {
+          handled = args.onFrame(frame, frameIndex++);
+        } catch (error) {
+          restoreProject();
+          args.onError ? args.onError(error) : console.error(error);
+          return;
         }
-      };
+        if (handled && typeof handled.then === 'function') {
+          handled.then(advance, error => {
+            restoreProject();
+            args.onError ? args.onError(error) : console.error(error);
+          });
+          return;
+        }
+      } else {
+        frameImages.push(frame);
+        frameIndex++;
+      }
+      advance();
+    };
+    var renderFrame = () => {
       renderCopy.view.render();
       renderCopy.view.paper.view.update();
-      frameImage.src = renderCopy.view.canvas.toDataURL(args.imageType);
+      var canvas = renderCopy.view.canvas;
+      if (args.frameFormat === 'raw') {
+        // Hand back pixels directly. The video encoder needs them, and going through
+        // an Image would cost a base64 encode/decode round trip per frame.
+        var imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+
+        // The container is sized args.width/devicePixelRatio so that the backing store
+        // lands on args.width. Don't trust that silently.
+        if (imageData.width !== args.width || imageData.height !== args.height) {
+          console.warn('generateImageSequence: asked for ' + args.width + 'x' + args.height + ' frames but the canvas rendered ' + imageData.width + 'x' + imageData.height + '.');
+        }
+
+        // Don't recurse synchronously - the stack would grow with the frame count.
+        window.setTimeout(() => {
+          onFrameCaptured({
+            data: imageData.data,
+            width: imageData.width,
+            height: imageData.height
+          });
+        }, 0);
+      } else {
+        var frameImage = new Image();
+        frameImage.onload = () => onFrameCaptured(frameImage);
+        frameImage.src = canvas.toDataURL(args.imageType);
+      }
     };
     this.resetSoundsPlayed();
     renderFrame();
@@ -52663,12 +52750,17 @@ Wick.Timeline = class extends Wick.Base {
    * @returns {string} - the SVG for the current view in string form (maybe this should be base64 or a blob or something)
    */
   exportSVG(onError) {
-    var svgOutput = paper.project.exportSVG({
+    var options = {
       asString: true,
       matchShapes: true,
       embedImages: true
-    });
-    return svgOutput;
+    };
+
+    // View.Project.exportSVG keeps the transparent-stage checkerboard out of the file.
+    if (this.project && this.project.view) {
+      return this.project.view.exportSVG(options);
+    }
+    return paper.project.exportSVG(options);
   }
   //this.project.paper.
   //paperGroup = new paper.Group
@@ -61884,6 +61976,17 @@ Wick.View.Project = class extends Wick.View {
   static get ORIGIN_CROSSHAIR_COLOR() {
     return '#CCCCCC';
   }
+
+  /* Editor-only checkerboard shown behind a transparent stage. */
+  static get CHECKERBOARD_SIZE() {
+    return 8;
+  }
+  static get CHECKERBOARD_COLOR_A() {
+    return '#ffffff';
+  }
+  static get CHECKERBOARD_COLOR_B() {
+    return '#d6d6d6';
+  }
   static get ORIGIN_CROSSHAIR_SIZE() {
     return 100;
   }
@@ -61911,6 +62014,8 @@ Wick.View.Project = class extends Wick.View {
     this._canvasBGColor = null;
     this._svgCanvas = null;
     this._svgBackgroundLayer = null;
+    this._checkerboardRaster = null;
+    this._checkerboardCacheKey = null;
     this._svgBordersLayer = null;
     this._svgGUILayer = null;
     this._pan = {
@@ -62121,8 +62226,16 @@ Wick.View.Project = class extends Wick.View {
   }
   _updateCanvasContainerBGColor() {
     if (this.model.focus === this.model.root) {
-      // We're in the root timeline, use the color given to us from the user (or use a default)
-      this.canvas.style.backgroundColor = this.canvasBGColor || Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
+      if (this.model.transparentBackground && this.model.isPublished) {
+        // A published transparent project lets whatever is behind the canvas show through.
+        this.canvas.style.backgroundColor = 'transparent';
+      } else {
+        // We're in the root timeline, use the color given to us from the user (or use a default)
+        this.canvas.style.backgroundColor = this.canvasBGColor || Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
+      }
+    } else if (this.model.transparentBackground) {
+      // We're inside a clip and there is no background color to borrow, so use the editor default.
+      this.canvas.style.backgroundColor = Wick.View.Project.DEFAULT_CANVAS_BG_COLOR;
     } else {
       // We're inside a clip, so use the project background color as the container background color
       this.canvas.style.backgroundColor = this.model.backgroundColor.hex;
@@ -62216,17 +62329,87 @@ Wick.View.Project = class extends Wick.View {
     }
 
     // Render black bars (for published projects)
-    if (this.model.isPublished && this.model.renderBlackBars) {
+    // A transparent project must not get opaque black painted over its edges.
+    if (this.model.isPublished && this.model.renderBlackBars && !this.model.transparentBackground) {
       this._svgBordersLayer.removeChildren();
       this._svgBordersLayer.addChildren(this._generateSVGBorders());
       this.paper.project.addLayer(this._svgBordersLayer);
     }
   }
+
+  /**
+   * Export the current paper scope as an SVG string.
+   * @param {object} options - passed straight through to paper's exportSVG
+   * @returns {string}
+   */
+  exportSVG(options) {
+    // paper exports every layer in the scope, the project background included. When the
+    // project is transparent that background is an editor-only checkerboard raster, and
+    // it must not get baked into the file (paper would embed it as a base64 image, and
+    // marking it invisible isn't enough - it exports hidden items too).
+    var backgroundLayer = this._svgBackgroundLayer;
+    var hideBackground = this.model.transparentBackground && this.paper.project.layers.indexOf(backgroundLayer) !== -1;
+    if (hideBackground) backgroundLayer.remove();
+    var svg = this.paper.project.exportSVG(options);
+    if (hideBackground) this.paper.project.insertLayer(0, backgroundLayer);
+    return svg;
+  }
   _generateSVGCanvasStage() {
+    if (this.model.transparentBackground) {
+      // Published: paint nothing at all, so the stage renders with alpha.
+      // In the editor: a checkerboard, so the stage bounds are still visible and
+      // "transparent" doesn't look like "white".
+      return this.model.isPublished ? new this.paper.Group({
+        insert: false
+      }) : this._generateSVGCheckerboardStage();
+    }
     var stage = new paper.Path.Rectangle(new this.paper.Point(0, 0), new this.paper.Point(this.model.width, this.model.height));
     stage.remove();
     stage.fillColor = this.model.backgroundColor.rgba;
     return stage;
+  }
+
+  /* Editor-only stand-in for a transparent stage. */
+  _generateSVGCheckerboardStage() {
+    var width = this.model.width;
+    var height = this.model.height;
+    var cacheKey = width + 'x' + height;
+
+    // paper.js fillColor takes no pattern, so the checkerboard is a raster of an
+    // offscreen canvas. Both are cached and only rebuilt when the stage is resized -
+    // and the raster is reused rather than recreated, so only one ever references
+    // the canvas (paper hands a raster's canvas back to its own pool when the raster
+    // is given a different image).
+    if (!this._checkerboardRaster || this._checkerboardCacheKey !== cacheKey) {
+      var size = Wick.View.Project.CHECKERBOARD_SIZE;
+      var canvas = window.document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = Wick.View.Project.CHECKERBOARD_COLOR_A;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = Wick.View.Project.CHECKERBOARD_COLOR_B;
+      for (var y = 0; y < height; y += size) {
+        var offset = y / size % 2 === 0 ? 0 : size;
+        for (var x = offset; x < width; x += size * 2) {
+          ctx.fillRect(x, y, size, size);
+        }
+      }
+      if (this._checkerboardRaster) this._checkerboardRaster.remove();
+
+      // `new paper.Raster(canvas)` does not do what it looks like: paper only
+      // recognises an <img> as an image, and reads anything else as a Size, handing
+      // back a *blank* canvas of those dimensions. Assign the image afterwards.
+      var raster = new paper.Raster({
+        insert: false
+      });
+      raster.image = canvas;
+      raster.smoothing = false;
+      this._checkerboardRaster = raster;
+      this._checkerboardCacheKey = cacheKey;
+    }
+    this._checkerboardRaster.position = new this.paper.Point(width / 2, height / 2);
+    return this._checkerboardRaster;
   }
   _generateSVGOriginCrosshair() {
     var originCrosshair = new this.paper.Group({
@@ -65761,8 +65944,11 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
    * @param {number} x - The x position on the screen.
    * @param {number} y - The y position on the screen.
    * @returns {object|null} A description of what was right clicked, of the shape {type},
-   * where type is 'frame', 'tween', or 'empty' (a cell with no frame in it). Empty targets
-   * also carry {playheadPosition, layerIndex}. Returns null if there's nothing right
+   * where type is 'frame', 'tween', or 'empty' (a cell with no frame in it). Frame and tween
+   * targets also carry the {uuid} of the clicked object, so that a menu can act on exactly
+   * what was clicked instead of going through the selection (right clicking something that
+   * was already selected deliberately leaves the rest of the selection alone). Empty targets
+   * carry {playheadPosition, layerIndex} instead. Returns null if there's nothing right
    * clickable at that position.
    */
   rightClickAtPosition(x, y) {
@@ -65781,13 +65967,15 @@ Wick.GUIElement.Project = class extends Wick.GUIElement {
       this.model.activeTimeline.playheadPosition = model.playheadPosition + model.parentFrame.start - 1;
       this._selectRightClickedObject(model);
       return {
-        type: 'tween'
+        type: 'tween',
+        uuid: model.uuid
       };
     } else if (model instanceof Wick.Frame) {
       this.model.activeTimeline.playheadPosition = model.start + Math.floor(target.localMouse.x / this.gridCellWidth);
       this._selectRightClickedObject(model);
       return {
-        type: 'frame'
+        type: 'frame',
+        uuid: model.uuid
       };
     } else if (target instanceof Wick.GUIElement.FramesContainer && target.addFrameOverlayIsActive()) {
       // An empty cell: there's nothing to select, but a frame can be added here.

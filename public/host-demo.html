@@ -73,6 +73,17 @@
         }
 
         button:hover, label.file:hover { border-color: var(--accent); }
+
+        label.toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--dim);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        label.toggle input { margin: 0; cursor: pointer; }
         button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
         label.file input { display: none; }
 
@@ -93,6 +104,17 @@
             border-radius: 8px;
             overflow: hidden;
             background: #000;
+        }
+
+        /* A checkerboard behind the player frame, so a transparent project
+           visibly shows the host page rather than looking like a black one. */
+        #stage.checkered {
+            background-color: #cfd3da;
+            background-image:
+                linear-gradient(45deg, #9aa1ad 25%, transparent 25%, transparent 75%, #9aa1ad 75%),
+                linear-gradient(45deg, #9aa1ad 25%, transparent 25%, transparent 75%, #9aa1ad 75%);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
         }
 
         #player {
@@ -162,6 +184,28 @@
             "Send to player"         makeWickProjectData() out of the editor
                                      frame, stash it, hand it to the player
             "Load into editor"       the reverse, for round-tripping
+            "New 1080x1080"          newWickProject() at a host-chosen stage
+            "Project info"           getWickProjectInfo() readback
+
+        The "transparent" checkbox opens the editor with ?transparent=1 (and
+        makes "New 1080x1080" ask for a transparent project), and puts a
+        checkerboard behind the player frame. A project with no background
+        renders with alpha all the way through, so what shows through the
+        player is this page - the checkerboard, not black. The player follows
+        the project on its own; ?transparent / the 'transparent' command are
+        only there to override it.
+
+        The "embed mode" checkbox picks whether the editor frame is opened as
+        index.html or index.html?embed=1. Embedded, the editor drops the
+        autosave-restore prompt and writes no autosaves, and its menu bar
+        offers "done" instead of new/open/save - pressing it fires
+        'wick-editor-close-request', which this page listens for and treats
+        exactly like "Send to player".
+
+        To check that by hand: uncheck the box, press W, draw, wait 15s so an
+        autosave lands, close. Press W again - the restore prompt appears. Now
+        re-check the box and press W: no prompt, and nothing further is written
+        to the autosave slot.
 
         The editor is same-origin here, so the host calls its exposed globals
         (window.wickEditorReady, window.makeWickProjectData, ...) directly. The
@@ -178,6 +222,12 @@
         <button id="btn-mute">Mute</button>
         <label class="file">Load .wick&hellip;<input type="file" id="file" accept=".wick"/></label>
         <button id="btn-clear">Clear stored</button>
+        <label class="toggle" title="Open the editor as index.html?embed=1">
+            <input type="checkbox" id="embed-mode" checked/>embed mode
+        </label>
+        <label class="toggle" title="Open the editor as index.html?transparent=1, and checker the stage">
+            <input type="checkbox" id="transparent-mode"/>transparent
+        </label>
     </header>
 
     <main>
@@ -193,6 +243,8 @@
             <strong>Wick Editor</strong>
             <span class="hint" id="overlay-status">starting&hellip;</span>
             <span class="spacer"></span>
+            <button id="btn-new">New 1080&times;1080</button>
+            <button id="btn-info">Project info</button>
             <button id="btn-to-editor">&uarr; Load stored project into editor</button>
             <button id="btn-to-player">&darr; Send to player &amp; close</button>
             <button id="btn-cancel">Close without sending</button>
@@ -213,6 +265,10 @@
         var playerReady = false;
         var muted = true;
         var storedProject = null;
+
+        // getWickProjectRevision() as of the moment the editor came up, so the
+        // export at the end can be skipped when the user changed nothing.
+        var openRevision = null;
 
         try {
             storedProject = window.localStorage.getItem(STORAGE_KEY);
@@ -314,11 +370,42 @@
             // Mounted fresh each time: the editor keeps a live Wick.Project and
             // a paper.js scope on its window, and tearing the frame down is the
             // one reliable way to get rid of both.
-            editorFrame.src = 'index.html';
+            var embed = document.getElementById('embed-mode').checked;
+            var transparent = transparentMode();
+            var query = [];
+            if (embed) query.push('embed=1');
+            if (transparent) query.push('transparent=1');
 
-            editorWindow().then(function () {
+            openRevision = null;
+            editorFrame.src = 'index.html' + (query.length ? '?' + query.join('&') : '');
+
+            editorWindow().then(function (w) {
                 overlayStatus.textContent = 'ready';
-                log('editor ready');
+
+                // A build older than this page expects is the failure the
+                // version stamp catches. Without it the same problem surfaces
+                // much later, as "makeWickProjectData is not a function" thrown
+                // from inside a callback, at the moment the user wants their
+                // work back.
+                var version = w.getWickApiVersion ? w.getWickApiVersion() : 1;
+                log('editor ready (embed API v' + version + (embed ? ', embed mode' : '') +
+                    (transparent ? ', transparent' : '') + ')');
+
+                if (transparent && version < 3) {
+                    log('this build predates ?transparent (needs API v3) - the project will be opaque.');
+                }
+
+                if (version < 2) {
+                    overlayStatus.textContent = 'stale build (API v' + version + ')';
+                    log('this build predates newWickProject/getWickProjectInfo - redeploy it.');
+                    return;
+                }
+
+                openRevision = w.getWickProjectRevision();
+                logProjectInfo(w);
+
+                // The editor's own "done" button, shown in embed mode.
+                w.addEventListener('wick-editor-close-request', sendToPlayerAndClose);
             }, function (e) {
                 overlayStatus.textContent = 'failed: ' + e.message;
                 log('editor failed to come up: ' + e.message);
@@ -350,20 +437,81 @@
             });
         }
 
-        document.getElementById('btn-to-player').onclick = function () {
+        function logProjectInfo (w) {
+            var info = w.getWickProjectInfo();
+            log('project "' + info.name + '" — ' + info.width + '×' + info.height +
+                ', ' + info.frameCount + ' frames @ ' + info.framerate + 'fps (' +
+                Math.round(info.durationMs) + 'ms), background ' +
+                (info.transparentBackground ? 'transparent (matte ' + info.backgroundColor + ')'
+                                            : info.backgroundColor) +
+                ', revision ' + w.getWickProjectRevision());
+        }
+
+        function transparentMode () {
+            return document.getElementById('transparent-mode').checked;
+        }
+
+        // Also the handler for 'wick-editor-close-request', so the editor's own
+        // "done" button and this page's button do the same thing.
+        function sendToPlayerAndClose () {
             overlayStatus.textContent = 'exporting…';
             editorWindow()
-                .then(function (w) { return w.makeWickProjectData({format: 'base64'}); })
+                .then(function (w) {
+                    // Nothing edited means nothing to export. Cheap here, but
+                    // this is the check that keeps an mp4 export — frame
+                    // rendering plus an ffmpeg mux, seconds of it — from
+                    // running every time a document is opened and closed again.
+                    if (openRevision !== null && w.getWickProjectRevision() === openRevision) {
+                        log('unchanged at revision ' + openRevision + ' — skipping the export');
+                        return null;
+                    }
+                    return w.makeWickProjectData({format: 'base64'});
+                })
                 .then(function (base64) {
+                    closeEditor();
+                    if (base64 === null) {
+                        if (storedProject) playInPlayer(storedProject);
+                        return;
+                    }
                     store(base64);
                     log('exported ' + Math.round(base64.length / 1024) + ' KB of project data');
-                    closeEditor();
                     playInPlayer(base64);
                 })
                 .catch(function (e) {
                     overlayStatus.textContent = 'export failed: ' + e.message;
                     log('export failed: ' + e.message);
                 });
+        }
+
+        document.getElementById('btn-to-player').onclick = sendToPlayerAndClose;
+
+        document.getElementById('btn-new').onclick = function () {
+            overlayStatus.textContent = 'creating…';
+            editorWindow()
+                .then(function (w) {
+                    return w.newWickProject({
+                            width: 1080,
+                            height: 1080,
+                            framerate: 24,
+                            transparent: transparentMode(),
+                        })
+                        .then(function () { return w; });
+                })
+                .then(function (w) {
+                    openRevision = w.getWickProjectRevision();
+                    overlayStatus.textContent = 'blank 1080×1080 project';
+                    logProjectInfo(w);
+                })
+                .catch(function (e) {
+                    overlayStatus.textContent = 'new project failed: ' + e.message;
+                    log('newWickProject failed: ' + e.message);
+                });
+        };
+
+        document.getElementById('btn-info').onclick = function () {
+            editorWindow()
+                .then(logProjectInfo)
+                .catch(function (e) { log('getWickProjectInfo failed: ' + e.message); });
         };
 
         document.getElementById('btn-to-editor').onclick = function () {
@@ -373,9 +521,16 @@
             }
             overlayStatus.textContent = 'loading…';
             editorWindow()
-                .then(function (w) { return w.loadWickProjectData(storedProject, {format: 'base64'}); })
-                .then(function (project) {
-                    overlayStatus.textContent = 'loaded "' + project.name + '"';
+                .then(function (w) {
+                    return w.loadWickProjectData(storedProject, {format: 'base64'})
+                        .then(function (project) { return {w: w, project: project}; });
+                })
+                .then(function (result) {
+                    // Loading is itself a mutation, so re-baseline afterwards;
+                    // otherwise the document reads as edited before it is.
+                    openRevision = result.w.getWickProjectRevision();
+                    overlayStatus.textContent = 'loaded "' + result.project.name + '"';
+                    logProjectInfo(result.w);
                     log('pushed the stored project into the editor');
                 })
                 .catch(function (e) {
@@ -385,6 +540,10 @@
         };
 
         document.getElementById('btn-cancel').onclick = closeEditor;
+
+        document.getElementById('transparent-mode').onchange = function () {
+            document.getElementById('stage').classList.toggle('checkered', transparentMode());
+        };
 
         // Note this only fires while the host page has focus — key events
         // inside either iframe belong to that document and never reach here,

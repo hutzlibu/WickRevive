@@ -57,7 +57,8 @@ import WickCodeEditor from './PopOuts/WickCodeEditor/WickCodeEditor';
 
 import EditorWrapper from './EditorWrapper';
 
-import { registerEmbedAPI } from './export/EmbedAPI';
+import { registerEmbedAPI, requestEmbedClose } from './export/EmbedAPI';
+import { isEmbedMode, getEmbedStageOptions } from './export/EmbedMode';
 
 import { version } from '../../package.json';
 
@@ -78,7 +79,10 @@ class Editor extends EditorCore {
     this.state = {
       project: null,
       previewPlaying: false,
-      activeModalName: window.localStorage.skipWelcomeMessage ? null : "WelcomeMessage",
+      // Same reasoning as the autosave prompt in componentDidMount: embedded,
+      // this covers the document the host just asked for with a version splash
+      // the host never requested and cannot dismiss.
+      activeModalName: (window.localStorage.skipWelcomeMessage || isEmbedMode()) ? null : "WelcomeMessage",
       activeModalQueue: [],
       codeEditorOpen: false,
       scriptToEdit: "default",
@@ -134,6 +138,11 @@ class Editor extends EditorCore {
 
     // Last Autosave
     this._lastAutosave = 0;
+
+    // Bumped by every projectDidChange(). Read by the embed API's
+    // getWickProjectRevision(), so a host can tell "nothing was edited" from
+    // "something was" without re-exporting to find out.
+    this._projectRevision = 0;
 
     // Create interfaces.
     this.fontInfoInterface = new FontInfoInterface(this);
@@ -207,7 +216,9 @@ class Editor extends EditorCore {
   UNSAFE_componentWillMount = () => {
     document.title =  `Wick Editor ${this.editorVersion}`;
     // Initialize "live" engine state
-    this.project = new window.Wick.Project();
+    // ?width=/?height=/?framerate=/?transparent= let a host boot straight into its
+    // own stage, instead of flashing the default one before newWickProject() lands.
+    this.project = new window.Wick.Project(getEmbedStageOptions());
     this.attachErrorHandlers();
     this.paper = window.paper;
 
@@ -269,7 +280,10 @@ class Editor extends EditorCore {
     console.log("Project Mounted");
     this.hidePreloader();
     this.onWindowResize();
-    if(!this.tryToParseProjectURL()) {
+    // Embedded, the host owns persistence: the autosave slot holds some other
+    // document, and offering to restore it over the one the host just asked
+    // for is never what the user meant.
+    if(!this.tryToParseProjectURL() && !isEmbedMode()) {
       this.showAutosavedProjects();
     }
 
@@ -679,6 +693,10 @@ class Editor extends EditorCore {
 
     if (!options.actionName) { options.name = "Unknown Action" };
 
+    // Every project mutation comes through here, so this is the one place a
+    // revision counter has to be bumped. See getWickProjectRevision().
+    this._projectRevision += 1;
+
     // Request an autosave, so a save will happen sometime later.
     this.requestAutosave();
 
@@ -963,6 +981,8 @@ class Editor extends EditorCore {
               toast={this.toast} 
               openExportMedia={() => {this.openModal('ExportMedia')}}
               openExportOptions={() => {this.openModal('ExportOptions')}}
+              embedded={isEmbedMode()}
+              requestEmbedClose={requestEmbedClose}
             />
           </DockedPanel>
         </div>

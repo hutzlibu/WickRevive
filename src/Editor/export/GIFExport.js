@@ -37,8 +37,15 @@ class GIFExport {
 
     let combineImageSequence = images => {
       images.forEach(image => {
+        // GIF has no alpha channel here - gif.js composites every frame onto black - so a
+        // transparent project is flattened onto its background color first rather than
+        // silently turning black.
+        let frame = project.transparentBackground
+          ? GIFExport._flattenOntoMatte(image, project.backgroundColor.hex, width, height)
+          : image;
+
         // Add frame to gif.
-        gif.addFrame(image, {delay: 1000/project.framerate});
+        gif.addFrame(frame, {delay: 1000/project.framerate});
       });
       onProgress('Rendering GIF', renderingProgress);
       gif.render(); // Finalize gif render.
@@ -58,6 +65,23 @@ class GIFExport {
       onFinish: combineImageSequence,
       onProgress: updateProgress,
     });
+  }
+
+  /**
+   * Draw a rendered frame onto an opaque matte color.
+   * @returns {HTMLCanvasElement}
+   */
+  static _flattenOntoMatte (image, matteColor, width, height) {
+    let canvas = window.document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    let ctx = canvas.getContext('2d');
+    ctx.fillStyle = matteColor;
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas;
   }
 }
 
