@@ -8,8 +8,8 @@ Phase 0 split in the refactor plan"). §2 and §5 were re-verified against that
 commit first and were still accurate as written.
 
 **Status: R1–R4, R6 and R7 are implemented and verified; R5 is deliberately not
-built** (see below). The changes are in the working tree, not yet committed —
-re-stamp this line with the commit hash once they are.
+built** (see below). Committed as `e6b7b7af` ("Add an embed API so a host page can
+drive the editor in an iframe"), now on `master`.
 
 | Item | Status |
 |---|---|
@@ -21,7 +21,7 @@ re-stamp this line with the commit hash once they are.
 | R3 `getWickProjectInfo()` | done |
 | R4 `getWickProjectRevision()` | done, with two caveats documented at the function |
 | R5 `makeWickPosterExport()` | **not built** — needs an `engine/src` change; see below |
-| R6 `getWickApiVersion()` | done, returns `2` |
+| R6 `getWickApiVersion()` | done, returned `2` here; bumped to `3` by the transparent-background work (`21f4edb7`) |
 | R7 close-request event | done, fired by a "done" button shown in embed mode |
 | §9 redeploy | done — `/srv/http/Experimente/Release/WickRevive` now carries the API |
 

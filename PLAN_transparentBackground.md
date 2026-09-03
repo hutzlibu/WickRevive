@@ -4,6 +4,18 @@ Goal: a Wick project can have **no background** — the stage renders with alpha
 transparency survives all the way through **video export**, plus the PNG sequence, HTML
 export and the embed/player loop. GIF is explicitly out of scope (see *Formats that flatten*).
 
+**Status: implemented and on `master`**, as `21f4edb7` ("Add transparent project
+backgrounds, and fix video export playback").
+
+One thing landed that this plan did not foresee: **the browser encodes the mp4 now.**
+§0 below concludes that an mp4 out of here is necessarily MPEG-4 Part 2 (`mp4v`), and
+that was true of the bundled ffmpeg — but not of the browser, which has an H.264 encoder
+of its own. `src/Editor/export/WebCodecsEncoder.js` uses it and muxes the result with
+`mp4-muxer`, so a normal `.mp4` export now plays in a browser. The mpeg4 path in §0 and
+§5 survives only as the `legacy` fallback for browsers without WebCodecs. Everything §0
+says about the *bundled* encoder (no libx264, no zlib, no parsers/bsfs) is still exactly
+right, and still shapes the `.mov` and matte routes.
+
 ---
 
 ## 0. What the bundled encoder can actually do (measured, not assumed)

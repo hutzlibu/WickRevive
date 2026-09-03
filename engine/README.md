@@ -8,12 +8,18 @@ You will need the following things installed:
 
 - [npm](https://www.npmjs.com/)
 
-1. Make sure you `cd` into the `wick-engine` directory.
+1. Make sure you `cd` into the `engine` directory.
 2. Install [gulp](https://gulpjs.com/): `npm install -g gulp`
 3. Install other dependencies for the build process: `npm install`
 4. Build the engine!: `gulp`
 
 This will create `dist/wickengine.js`.
+
+**From the repo root, prefer `npm run build-engine`.** Running `gulp` here writes only
+`engine/dist/`, but the editor loads the engine from `public/corelibs/wick-engine/`, and
+**both copies are tracked in git**. `npm run build-engine` writes both; commit both, or
+the editor runs stale engine code. Note also that `gulpfile.js` concatenates an explicit,
+ordered file list - a new source file that isn't added to that array is silently not built.
 
 # Generate Docs
 
@@ -21,6 +27,11 @@ Generating the docs also requires [npm](https://www.npmjs.com/).
 
 1. Install dependencies for the build process: `npm install`
 2. Build the docs with: `npm run generate-docs`
+
+**`generate-docs` force-pushes.** It writes `docs/`, then copies into a sibling
+`../../wick-editor-docs` checkout and does `git add . && git commit && git push --force`
+there. Don't run it casually - it needs that checkout to exist, and it will overwrite
+whatever is in it.
 
 # Running Tests
 

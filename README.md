@@ -6,9 +6,31 @@ The original wick editor is abandoned - and this is a fork mostly done by claude
 
 ## Changes
 
-update the build environment (vite)
+**Build**
 
-added one new tool, the pen pencil
+- build environment moved to vite
+- dropped the Electron desktop build - this is web-only now
+- every runtime asset path is relative, so the build can be deployed under a subpath
+
+**Drawing and editing**
+
+- new tool: the pen pencil
+- gradient fills, with an on-canvas gradient editor
+- right click context menus on the canvas and the timeline
+- flip and z-ordering bound to single keys
+- the code editor opens over the canvas instead of centered
+
+**Projects and export**
+
+- transparent project backgrounds - the stage can render with alpha, and that survives
+  through video, PNG sequence, SVG and HTML export
+- video export that actually plays in a browser: H.264 through the browser's own encoder
+  where available (the bundled ffmpeg can only write MPEG-4 Part 2, which no browser
+  decodes). `.mov` with lossless alpha and a double-height alpha matte `.mp4` are also
+  available
+- a standalone HTML export button in the menu bar
+- an embed API, so a host page can drive the editor in an iframe - see the tables in
+  `CLAUDE.md` and `PLAN_wickEmbedAPI.md`, and `public/host-demo.html` for a working harness
 
 ## Getting started
 

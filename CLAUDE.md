@@ -12,7 +12,7 @@ A fork of the [Wick Editor](https://github.com/Wicklets/wick-editor) (GPLv3) —
 ## Commands
 
 ```bash
-npm start                  # Vite dev server on http://localhost:5173 (README's :3000 is stale)
+npm start                  # Vite dev server on http://localhost:5173
 npm run build              # production build -> build/
 npm run preview            # serve the production build
 npm run build-engine       # rebuild engine + copy dist into public/corelibs/wick-engine/
